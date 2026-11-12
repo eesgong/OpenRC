@@ -1,0 +1,615 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1212" viewBox="0 0 900 1212" role="img" aria-labelledby="title desc">
+  <title id="title">OpenRC Architecture &amp; Feasibility Oracle Workflow</title>
+  <desc id="desc">Vertical architectural workflow of OpenRC: Stage I (Case and POC Axes, covering curated built-in cases 9bus, 9bus-scaled, cigre-hv and primary tested pandapower cases pp:case33bw, pp:mv_oberrhein feeder=1, pp:create_cigre_network_mv, pp:case9, plus all 60 pandapower grids) feeds Stage II (Feasibility Oracle, a power-flow feasibility interface supporting LinDistFlow, SOCP, Exact Gurobi, and AC/DC OPF models with three-valued verdicts: FEASIBLE, INFEASIBLE, INCONCLUSIVE). Through a decoupled query-verdict loop, Stage III (Region Builder) constructs Stage IV (Convex Polytope), which then branches into Stage V (Compression, Validation &amp; Certification, and Downstream Linear Optimization Applications).</desc>
+
+  <defs>
+    <!-- Background coordinate grid -->
+    <pattern id="bg-grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M 36 0 L 0 0 0 36" fill="none" stroke="#e6e1d6" stroke-width="0.75"/>
+    </pattern>
+
+    <!-- Diagonal Hatch for Outer Nonlinear Envelope in Polytope Plot -->
+    <pattern id="envelope-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#c8963e" stroke-width="1.1" stroke-opacity="0.32"/>
+    </pattern>
+
+    <!-- Card drop shadow -->
+    <filter id="card-shadow" x="-2%" y="-2%" width="104%" height="106%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#1e2530" flood-opacity="0.06"/>
+    </filter>
+
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap');
+
+      /* Surface and frame styles */
+      .canvas-bg { fill: #f7f5f0; }
+      .outer-frame { fill: none; stroke: #2c3542; stroke-width: 1.5; }
+      .inner-brass-rule { fill: none; stroke: #c5b69e; stroke-width: 0.9; }
+      .divider-rule { stroke: #dcd6c9; stroke-width: 1; fill: none; }
+
+      .card-base {
+        fill: #fdfcf9;
+        stroke: #c6bfb0;
+        stroke-width: 1.2;
+        filter: url(#card-shadow);
+      }
+      .card-oracle {
+        fill: #fdfcf9;
+        stroke: #b88c42;
+        stroke-width: 1.5;
+        filter: url(#card-shadow);
+      }
+      .subpanel {
+        fill: #f6f4ee;
+        stroke: #dcd6c8;
+        stroke-width: 1;
+      }
+
+      /* Typography styles */
+      .kicker {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.8px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        fill: #5c6573;
+      }
+      .stage-num {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.6px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
+      .main-heading {
+        font-family: "Instrument Serif", "Palatino Linotype", "Iowan Old Style", "Baskerville", Georgia, serif;
+        font-size: 18.2px;
+        font-weight: 400;
+        letter-spacing: 0.005em;
+        fill: #1a212b;
+      }
+      .serif-italic {
+        font-family: "Instrument Serif", "Palatino Linotype", "Iowan Old Style", "Baskerville", Georgia, serif;
+        font-style: italic;
+      }
+      .card-title {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 15.5px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        fill: #1a212b;
+      }
+      .card-title-sm {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        fill: #1a212b;
+      }
+      .module-tag {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 10px;
+        font-weight: 500;
+        fill: #5c6573;
+      }
+      .section-label {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        fill: #2c3542;
+      }
+      .body-text {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 11.3px;
+        font-weight: 400;
+        fill: #39424e;
+      }
+      .body-sm {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 10.5px;
+        font-weight: 400;
+        fill: #495361;
+      }
+      .body-bold {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 11.3px;
+        font-weight: 700;
+        fill: #1a212b;
+      }
+      .mono-code {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 10px;
+        font-weight: 600;
+        fill: #1a212b;
+      }
+      .mono-sm {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.3px;
+        font-weight: 500;
+        fill: #39424e;
+      }
+      .verdict-badge {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      /* Accent palette */
+      .c-slate     { fill: #1a212b; }
+      .c-muted     { fill: #5c6573; }
+      .c-verdigris { fill: #265951; }
+      .c-amber     { fill: #8c5a0d; }
+      .c-fjord     { fill: #1d3c63; }
+      .c-brick     { fill: #7c2d2d; }
+      .fw-bold     { font-weight: 700; }
+    </style>
+  </defs>
+
+  <!-- ====================================================================
+       0. BACKGROUND CANVAS & FRAME
+       ==================================================================== -->
+  <rect class="canvas-bg" x="0" y="0" width="900" height="1212" rx="6"/>
+  <rect x="14" y="14" width="872" height="1184" fill="url(#bg-grid)"/>
+  <rect class="outer-frame" x="14" y="14" width="872" height="1184" rx="4"/>
+  <rect class="inner-brass-rule" x="18" y="18" width="864" height="1176" rx="2"/>
+
+  <!-- ====================================================================
+       1. HEADER BANNER (y = 18..108)
+       ==================================================================== -->
+  <rect x="19" y="19" width="862" height="88" fill="#fdfcf9"/>
+  <line class="outer-frame" x1="18" y1="107" x2="882" y2="107"/>
+  <line class="inner-brass-rule" x1="18" y1="110" x2="882" y2="110"/>
+
+  <!-- Polytope emblem -->
+  <g transform="translate(38, 36)">
+    <circle cx="24" cy="24" r="22" fill="#f7f5f0" stroke="#2c3542" stroke-width="1.4"/>
+    <circle cx="24" cy="24" r="18.5" fill="none" stroke="#b89c6d" stroke-width="0.8"/>
+    <polygon points="24,8 37,15 39,29 29,39 16,38 9,26 13,13" fill="#edf2f8" stroke="#1d3c63" stroke-width="1.4"/>
+    <line x1="24" y1="8"  x2="29" y2="39" stroke="#1d3c63" stroke-width="0.7" stroke-opacity="0.5"/>
+    <line x1="13" y1="13" x2="39" y2="29" stroke="#1d3c63" stroke-width="0.7" stroke-opacity="0.5"/>
+    <line x1="9"  y1="26" x2="37" y2="15" stroke="#1d3c63" stroke-width="0.7" stroke-opacity="0.5"/>
+    <circle cx="24" cy="8"  r="2" fill="#8c5a0d"/>
+    <circle cx="37" cy="15" r="2" fill="#8c5a0d"/>
+    <circle cx="39" cy="29" r="2" fill="#8c5a0d"/>
+    <circle cx="29" cy="39" r="2" fill="#8c5a0d"/>
+    <circle cx="16" cy="38" r="2" fill="#8c5a0d"/>
+    <circle cx="9"  cy="26" r="2" fill="#8c5a0d"/>
+    <circle cx="13" cy="13" r="2" fill="#8c5a0d"/>
+  </g>
+
+  <text class="kicker" x="98" y="43">OPENRC ARCHITECTURE  ·  SECURITY REGION COMPUTATION LIBRARY</text>
+  <text class="main-heading" x="98" y="69">
+    Decoupling <tspan class="serif-italic c-amber">Power-Flow Physics</tspan> from <tspan class="serif-italic c-fjord">Computational Geometry</tspan> &amp; <tspan class="serif-italic c-brick">Mathematical Programming</tspan>
+  </text>
+
+  <!-- Subtle Discipline Legend Strip -->
+  <g transform="translate(98, 81)">
+    <circle cx="5" cy="7" r="3.5" fill="#265951"/>
+    <text class="mono-sm c-slate" x="13" y="10.5">I &amp; V-B: Topology &amp; Audit</text>
+
+    <circle cx="186" cy="7" r="3.5" fill="#8c5a0d"/>
+    <text class="mono-sm c-slate" x="194" y="10.5">II: Feasibility Oracle (Physics)</text>
+
+    <circle cx="404" cy="7" r="3.5" fill="#1d3c63"/>
+    <text class="mono-sm c-slate" x="412" y="10.5">III &amp; IV: Computational Geometry</text>
+
+    <circle cx="622" cy="7" r="3.5" fill="#7c2d2d"/>
+    <text class="mono-sm c-slate" x="630" y="10.5">V-A &amp; V-C: Compression &amp; LP</text>
+  </g>
+
+  <!-- ====================================================================
+       2. STAGE I: CASE & POC AXES (y = 124..288, height = 164)
+       ==================================================================== -->
+  <g id="stage-i-case" transform="translate(32, 124)">
+    <rect class="card-base" x="0" y="0" width="836" height="164" rx="6"/>
+    <!-- Top accent bar -->
+    <rect x="0" y="0" width="836" height="4" rx="2" fill="#265951"/>
+
+    <!-- Column 1: Stage Title & Mini Feeder Graph (x = 18..246) -->
+    <text class="stage-num c-verdigris" x="18" y="23">STAGE I  ·  INPUT &amp; TOPOLOGY</text>
+    <text class="card-title" x="18" y="43">Case + POC Axes</text>
+    <text class="module-tag" x="154" y="42">OpenRC.cases</text>
+
+    <rect class="subpanel" x="18" y="53" width="228" height="95" rx="4"/>
+    <text class="mono-sm c-verdigris fw-bold" x="28" y="68">Feeder Graph &amp; Selected POCs</text>
+    <!-- Feeder branches -->
+    <line x1="42"  y1="100" x2="88"  y2="100" stroke="#2c3542" stroke-width="1.8"/>
+    <line x1="88"  y1="100" x2="138" y2="84"  stroke="#2c3542" stroke-width="1.6"/>
+    <line x1="88"  y1="100" x2="138" y2="116" stroke="#2c3542" stroke-width="1.6"/>
+    <line x1="138" y1="84"  x2="188" y2="84"  stroke="#2c3542" stroke-width="1.6"/>
+    <!-- Slack root -->
+    <rect x="35" y="93" width="13" height="13" rx="1.5" fill="#2c3542"/>
+    <text class="mono-sm c-muted" x="29" y="120">Slack</text>
+    <!-- Bus nodes -->
+    <circle cx="88"  cy="100" r="4" fill="#fdfcf9" stroke="#2c3542" stroke-width="1.6"/>
+    <circle cx="138" cy="84"  r="5" fill="#c88a28" stroke="#2c3542" stroke-width="1.4"/>
+    <circle cx="138" cy="116" r="5" fill="#c88a28" stroke="#2c3542" stroke-width="1.4"/>
+    <circle cx="188" cy="84"  r="5" fill="#c88a28" stroke="#2c3542" stroke-width="1.4"/>
+    <text class="mono-sm c-muted" x="28" y="139">0-based IDs</text>
+    <text class="mono-sm c-slate fw-bold" x="236" y="139" text-anchor="end">Axes: Δ ∈ ℝᵈ</text>
+
+    <!-- Vertical Divider 1 -->
+    <line class="divider-rule" x1="260" y1="16" x2="260" y2="148"/>
+
+    <!-- Column 2: Curated & Primary Test Benchmarks (x = 274..558) -->
+    <text class="section-label c-verdigris" x="274" y="25">CURATED &amp; PRIMARY TEST BENCHMARKS</text>
+    <text class="body-text" x="274" y="44">• <tspan class="body-bold">Curated Built-in:</tspan> <tspan class="mono-code">9bus</tspan> (3–16D core),</text>
+    <text class="body-text" x="284" y="60"><tspan class="mono-code">9bus-scaled</tspan> (8D), <tspan class="mono-code">cigre-hv</tspan> (meshed OPF)</text>
+    <text class="body-text" x="274" y="79">• <tspan class="body-bold">Primary Tested:</tspan> <tspan class="mono-code">pp:case33bw</tspan> (33-bus),</text>
+    <text class="body-text" x="284" y="95"><tspan class="mono-code">pp:mv_oberrhein</tspan> (feeder=1), <tspan class="mono-code">pp:case9</tspan> (OPF),</text>
+    <text class="body-text" x="284" y="111"><tspan class="mono-code">pp:create_cigre_network_mv</tspan> (load_scale=0.8)</text>
+    <text class="body-text" x="274" y="130">• <tspan class="body-bold">Pandapower Adapter:</tspan> Any <tspan class="mono-code">pandapowerNet</tspan></text>
+    <text class="body-text" x="284" y="146">or all 60 built-in grids via <tspan class="mono-code">pp:&lt;name&gt;</tspan></text>
+
+    <!-- Vertical Divider 2 -->
+    <line class="divider-rule" x1="572" y1="16" x2="572" y2="148"/>
+
+    <!-- Column 3: Conventions & Isolation (x = 586..818) -->
+    <text class="section-label c-verdigris" x="586" y="25">CONVENTIONS &amp; ISOLATION</text>
+    <text class="body-text" x="586" y="46">• <tspan class="body-bold">SI / Grid Units:</tspan> <tspan class="mono-code">MW, Mvar, kV, kA</tspan></text>
+    <text class="body-text" x="586" y="67">• <tspan class="body-bold">Sign Rule:</tspan> Load <tspan class="mono-code">&gt; 0</tspan>, export <tspan class="mono-code">&lt; 0</tspan></text>
+    <text class="body-text" x="586" y="88">• <tspan class="body-bold">POC Axes:</tspan> <tspan class="mono-code">(bus, p/q)</tspan> e.g. <tspan class="mono-code">"247"</tspan>, <tspan class="mono-code">"1p,1q"</tspan></text>
+    <text class="body-text" x="586" y="109">• <tspan class="body-bold">Root Inference:</tspan> Auto slack (<tspan class="mono-code">slack_source</tspan>)</text>
+
+    <rect x="586" y="122" width="232" height="26" rx="4" fill="#eef5f3" stroke="#9ec2bc" stroke-width="1"/>
+    <text class="mono-sm c-verdigris fw-bold" x="702" y="139" text-anchor="middle">Immutable GridCase Snapshot</text>
+  </g>
+
+  <!-- ====================================================================
+       CONNECTOR I -> II (y = 288..320)
+       ==================================================================== -->
+  <g id="conn-i-to-ii">
+    <line x1="450" y1="288" x2="450" y2="312" stroke="#2c3542" stroke-width="1.8"/>
+    <polygon points="444.5,310 450,320 455.5,310" fill="#2c3542"/>
+    <rect x="270" y="292" width="360" height="19" rx="9.5" fill="#f7f5f0"/>
+    <text class="mono-sm c-muted" x="450" y="305.5" text-anchor="middle">
+      Base nodal injections <tspan class="mono-code">(p₀, q₀)</tspan>, topology &amp; voltage/thermal limits
+    </text>
+  </g>
+
+  <!-- ====================================================================
+       3. STAGE II: FEASIBILITY ORACLE (y = 320..628, height = 308)
+       ==================================================================== -->
+  <g id="stage-ii-oracle" transform="translate(32, 320)">
+    <rect class="card-oracle" x="0" y="0" width="836" height="308" rx="6"/>
+    <!-- Top accent bar -->
+    <rect x="0" y="0" width="836" height="4.5" rx="2" fill="#946210"/>
+
+    <!-- Header Row -->
+    <text class="stage-num c-amber" x="18" y="23">STAGE II  ·  POWER-FLOW FEASIBILITY INTERFACE</text>
+    <text class="card-title" x="18" y="44">Feasibility Oracle</text>
+    <text class="module-tag" x="164" y="43">OpenRC.powerflow · FeasibilityOracle</text>
+    <text class="mono-sm c-amber fw-bold" x="818" y="43" text-anchor="end">orc.get_oracle(name, case)</text>
+
+    <!-- Core Question Callout Banner (2-line balanced layout) -->
+    <rect x="18" y="53" width="800" height="55" rx="4" fill="#fbf6eb" stroke="#dec393" stroke-width="1.2"/>
+    <rect x="18" y="53" width="4.5" height="55" rx="1" fill="#946210"/>
+    <text class="section-label c-amber" x="32" y="69">ORACLE QUERY SPECIFICATION:</text>
+    <text class="body-text c-slate" x="32" y="86">
+      “Given a full nodal power injection vector <tspan class="mono-code">(P, Q) = (p₀, q₀) + B·Δ</tspan> for region coordinate <tspan class="mono-code">Δ ∈ ℝᵈ</tspan>,
+    </text>
+    <text class="body-text c-slate" x="32" y="101">
+      can the network accommodate it within all <tspan class="body-bold">voltage [v_min, v_max]</tspan> and <tspan class="body-bold">thermal I_max</tspan> limits?”
+    </text>
+
+    <!-- 2x2 Grid of Pluggable Power-Flow & OPF Models -->
+    <text class="section-label" x="18" y="126">FOUR PLUGGABLE POWER-FLOW &amp; OPTIMAL POWER-FLOW MODEL FAMILIES</text>
+
+    <!-- Model 1 (Top-Left): Linear & Conservative -->
+    <g transform="translate(18, 134)">
+      <rect class="subpanel" x="0" y="0" width="392" height="54" rx="4"/>
+      <rect x="0" y="0" width="4" height="54" rx="1" fill="#1d3c63"/>
+      <text class="body-bold" x="12" y="17">1. Linear &amp; Paired Inner Models</text>
+      <text class="mono-sm c-fjord fw-bold" x="382" y="17" text-anchor="end">~25 µs · analytic</text>
+      <text class="mono-code" x="12" y="33" style="font-size:8.9px;">[lindistflow ∩ lindistflow-vdrop] · [tight-voltage ∩ tight-flow]</text>
+      <text class="body-sm" x="12" y="47">Standalone <tspan class="mono-sm">lindistflow</tspan> or paired 2×2 for inner approximations (no solver)</text>
+    </g>
+
+    <!-- Model 2 (Top-Right): SOCP Outer Relaxation -->
+    <g transform="translate(426, 134)">
+      <rect class="subpanel" x="0" y="0" width="392" height="54" rx="4"/>
+      <rect x="0" y="0" width="4" height="54" rx="1" fill="#946210"/>
+      <text class="body-bold" x="12" y="17">2. Conic Outer Relaxation (<tspan class="mono-code">socp</tspan>)</text>
+      <text class="mono-sm c-amber fw-bold" x="382" y="17" text-anchor="end">Pyomo · MOSEK · Gurobi</text>
+      <text class="mono-code" x="12" y="33" style="font-size:9.4px;">Second-Order Cone Branch-Flow Relaxation (Outer Bound)</text>
+      <text class="body-sm" x="12" y="47">Fast outer-relaxation screening; certifies global infeasibility</text>
+    </g>
+
+    <!-- Model 3 (Bottom-Left): Global Non-Convex Exact -->
+    <g transform="translate(18, 196)">
+      <rect class="subpanel" x="0" y="0" width="392" height="54" rx="4"/>
+      <rect x="0" y="0" width="4" height="54" rx="1" fill="#7c2d2d"/>
+      <text class="body-bold" x="12" y="17">3. Global Non-Convex Exact (<tspan class="mono-code">exact</tspan>)</text>
+      <text class="mono-sm c-brick fw-bold" x="382" y="17" text-anchor="end">Gurobi NonConvex=2</text>
+      <text class="mono-code" x="12" y="33" style="font-size:9.4px;">Global Branch-Flow Adjudicator + Interval RadialSweep</text>
+      <text class="body-sm" x="12" y="47">Certifies feasibility via Banach fixed-point interval enclosures</text>
+    </g>
+
+    <!-- Model 4 (Bottom-Right): AC/DC & OPF -->
+    <g transform="translate(426, 196)">
+      <rect class="subpanel" x="0" y="0" width="392" height="54" rx="4"/>
+      <rect x="0" y="0" width="4" height="54" rx="1" fill="#265951"/>
+      <text class="body-bold" x="12" y="17">4. Full AC/DC &amp; Optimal Power Flow</text>
+      <text class="mono-sm c-verdigris fw-bold" x="382" y="17" text-anchor="end">pandapower · meshed OK</text>
+      <text class="mono-code" x="12" y="33" style="font-size:9.4px;">acpf · dcpf (fixed dispatch)  |  acopf · dcopf (dispatchable)</text>
+      <text class="body-sm" x="12" y="47">No radiality requirement; supports meshed grids &amp; generator re-dispatch</text>
+    </g>
+
+    <!-- Three-Valued Verdict Bar -->
+    <line class="divider-rule" x1="18" y1="260" x2="818" y2="260"/>
+    <text class="section-label" x="18" y="280">THREE-VALUED VERDICT:</text>
+
+    <!-- Badge 1: FEASIBLE -->
+    <rect x="166" y="267" width="102" height="22" rx="4" fill="#eef5f3" stroke="#265951" stroke-width="1.2"/>
+    <circle cx="178" cy="278" r="3.5" fill="#265951"/>
+    <text class="verdict-badge c-verdigris" x="187" y="281.5">FEASIBLE</text>
+
+    <!-- Badge 2: INFEASIBLE -->
+    <rect x="276" y="267" width="112" height="22" rx="4" fill="#faf0f0" stroke="#7c2d2d" stroke-width="1.2"/>
+    <circle cx="288" cy="278" r="3.5" fill="#7c2d2d"/>
+    <text class="verdict-badge c-brick" x="297" y="281.5">INFEASIBLE</text>
+
+    <!-- Badge 3: INCONCLUSIVE -->
+    <rect x="396" y="267" width="122" height="22" rx="4" fill="#fbf6eb" stroke="#946210" stroke-width="1.2"/>
+    <circle cx="408" cy="278" r="3.5" fill="#946210"/>
+    <text class="verdict-badge c-amber" x="417" y="281.5">INCONCLUSIVE</text>
+
+    <!-- Verdict Explanation on Right -->
+    <text class="body-sm c-slate" x="530" y="276">
+      <tspan class="body-bold" style="font-size:10.4px;">Conservative rule:</tspan> <tspan class="mono-sm">INCONCLUSIVE</tspan> (non-convergence)
+    </text>
+    <text class="body-sm c-slate" x="530" y="290">
+      stays <tspan class="body-bold" style="font-size:10.4px;">outside</tspan> during growth &amp; escalates in validation.
+    </text>
+  </g>
+
+  <!-- ====================================================================
+       4. CLOSED-LOOP QUERY–VERDICT PROTOCOL (y = 628..686, height = 58)
+       ==================================================================== -->
+  <g id="conn-ii-iii-loop">
+    <!-- Left Upward Query Arrow: Builder -> Oracle -->
+    <line x1="295" y1="686" x2="295" y2="637" stroke="#1d3c63" stroke-width="2"/>
+    <polygon points="289.5,639 295,628 300.5,639" fill="#1d3c63"/>
+    <rect x="92" y="643" width="192" height="28" rx="4" fill="#edf2f8" stroke="#a6bedb" stroke-width="1.1"/>
+    <text class="mono-sm c-fjord fw-bold" x="188" y="660" text-anchor="middle">↑ Query Δ ∈ ℝᵈ (ray / seed)</text>
+
+    <!-- Center Decoupled Pill Badge -->
+    <rect x="366" y="644" width="168" height="26" rx="13" fill="#2c3542"/>
+    <text class="kicker" x="450" y="660.5" text-anchor="middle" style="fill:#fdfcf9;font-size:9.2px;">DECOUPLED INTERFACE</text>
+
+    <!-- Right Downward Verdict Arrow: Oracle -> Builder -->
+    <line x1="605" y1="628" x2="605" y2="677" stroke="#946210" stroke-width="2"/>
+    <polygon points="599.5,675 605,686 610.5,675" fill="#946210"/>
+    <rect x="616" y="643" width="206" height="28" rx="4" fill="#fbf6eb" stroke="#dec393" stroke-width="1.1"/>
+    <text class="mono-sm c-amber fw-bold" x="719" y="660" text-anchor="middle">↓ Verdict + Signed Margin</text>
+  </g>
+
+  <!-- ====================================================================
+       5. ROW 3: STAGE III (BUILDER) -> STAGE IV (POLYTOPE) (y = 686..916, height = 230)
+       ==================================================================== -->
+  <!-- STAGE III: REGION BUILDER (Left Card, x = 32..502, width = 470) -->
+  <g id="stage-iii-builder" transform="translate(32, 686)">
+    <rect class="card-base" x="0" y="0" width="470" height="230" rx="6"/>
+    <rect x="0" y="0" width="470" height="4" rx="2" fill="#1d3c63"/>
+
+    <text class="stage-num c-fjord" x="18" y="23">STAGE III  ·  POLYTOPE CONSTRUCTION</text>
+    <text class="card-title" x="18" y="44">Region Builder</text>
+    <text class="module-tag" x="142" y="43">OpenRC.region</text>
+
+    <rect x="304" y="28" width="148" height="21" rx="4" fill="#edf2f8" stroke="#a6bedb" stroke-width="1"/>
+    <text class="mono-sm c-fjord fw-bold" x="378" y="42" text-anchor="middle" style="font-size:8.8px;">Queries Oracle Only</text>
+
+    <line class="divider-rule" x1="18" y1="54" x2="452" y2="54"/>
+
+    <!-- Left Subcolumn: Expansive Growth -->
+    <text class="section-label c-fjord" x="18" y="72">EXPANSIVE GROWTH</text>
+    <text class="body-text" x="18" y="91">• <tspan class="body-bold">Seeds:</tspan> <tspan class="mono-code">simplex</tspan>, <tspan class="mono-code">axis</tspan>, <tspan class="mono-code">random</tspan></text>
+    <text class="body-text" x="18" y="110">• <tspan class="body-bold">Facet Policies:</tspan></text>
+    <text class="mono-sm c-slate" x="28" y="126">volume-gain · facet-area</text>
+    <text class="mono-sm c-slate" x="28" y="141">adaptive-gradient · adaptive-ema</text>
+    <text class="body-text" x="18" y="160">• <tspan class="body-bold">Boundary Search:</tspan> ray bisection</text>
+    <text class="body-text" x="28" y="176">or signed-margin interpolation</text>
+
+    <!-- Vertical Divider inside Builder -->
+    <line class="divider-rule" x1="236" y1="62" x2="236" y2="184"/>
+
+    <!-- Right Subcolumn: Conservative Inner Methods -->
+    <text class="section-label c-fjord" x="250" y="72">PAIRWISE INNER APPROXIMATIONS</text>
+    <rect class="subpanel" x="250" y="80" width="202" height="46" rx="4"/>
+    <text class="body-bold c-fjord" x="258" y="96">Method 1: <tspan class="mono-code">intersect-shift</tspan></text>
+    <text class="mono-sm c-slate" x="258" y="115" style="font-size:7.6px;">(lindistflow ∩ lindistflow-vdrop) ⊖ B_loss</text>
+
+    <rect class="subpanel" x="250" y="132" width="202" height="46" rx="4"/>
+    <text class="body-bold c-fjord" x="258" y="148">Method 2: <tspan class="mono-code">tight-intersect</tspan></text>
+    <text class="mono-sm c-slate" x="258" y="167" style="font-size:8.8px;">tight-voltage ∩ tight-flow (direct)</text>
+
+    <!-- Bottom Budget Strip -->
+    <line class="divider-rule" x1="18" y1="191" x2="452" y2="191"/>
+    <text class="mono-sm c-muted" x="18" y="211" style="font-size:8.8px;">
+      <tspan class="c-slate fw-bold">Budgets:</tspan> max_vertices · max_oracle_calls · memory_limit_mb · n_workers
+    </text>
+  </g>
+
+  <!-- Horizontal Connector III -> IV (x = 502..534) -->
+  <g id="conn-iii-to-iv">
+    <line x1="502" y1="801" x2="525" y2="801" stroke="#1d3c63" stroke-width="2"/>
+    <polygon points="523,795.5 534,801 523,806.5" fill="#1d3c63"/>
+  </g>
+
+  <!-- STAGE IV: CONVEX POLYTOPE (Right Card, x = 534..868, width = 334) -->
+  <g id="stage-iv-polytope" transform="translate(534, 686)">
+    <rect class="card-base" x="0" y="0" width="334" height="230" rx="6"/>
+    <rect x="0" y="0" width="334" height="4" rx="2" fill="#1d3c63"/>
+
+    <text class="stage-num c-fjord" x="16" y="23">STAGE IV  ·  SECURITY REGION</text>
+    <text class="card-title" x="16" y="44">Convex Polytope</text>
+    <text class="module-tag" x="152" y="43">OpenRC.geometry</text>
+
+    <line class="divider-rule" x1="16" y1="54" x2="318" y2="54"/>
+
+    <!-- Left Mini-Plot: 2-D Polytope Diagram (x = 16..160, y = 64..212) -->
+    <rect x="16" y="64" width="144" height="148" rx="4" fill="#141e2e" stroke="#2c3542" stroke-width="1.2"/>
+    <!-- Coordinate axes -->
+    <line x1="16" y1="140" x2="160" y2="140" stroke="#283852" stroke-width="1"/>
+    <line x1="86" y1="64"  x2="86"  y2="212" stroke="#283852" stroke-width="1"/>
+    <text class="mono-sm" x="156" y="135" text-anchor="end" style="font-size:7.6px;fill:#8ea0b8;">ΔP₁</text>
+    <text class="mono-sm" x="90"  y="75"  style="font-size:7.6px;fill:#8ea0b8;">ΔP₂</text>
+    <text class="mono-sm" x="21"  y="76"  style="font-size:7.8px;fill:#e8be68;font-weight:700;">ℛ ⊂ 𝒞_exact</text>
+
+    <!-- Outer Nonlinear Boundary (dashed brass, kept clear of ΔP1 label) -->
+    <polygon points="86,82 128,97 132,145 106,188 50,184 29,143 40,93"
+             fill="url(#envelope-hatch)" stroke="#e8be68" stroke-width="1.2" stroke-dasharray="3 2"/>
+    <!-- Inner Convex Polytope -->
+    <polygon points="86,90 120,104 124,143 100,179 56,175 38,139 48,101"
+             fill="#244b7a" fill-opacity="0.78" stroke="#7eb0f2" stroke-width="1.8"/>
+    <!-- Ray Search Vector -->
+    <line x1="86" y1="140" x2="111" y2="95" stroke="#e06c6c" stroke-width="1.4" stroke-dasharray="2.5 2"/>
+    <polygon points="107.5,93.5 115,88 113.5,97.5" fill="#e06c6c"/>
+    <!-- Vertices -->
+    <circle cx="86"  cy="90"  r="2.6" fill="#e8be68" stroke="#141e2e" stroke-width="0.9"/>
+    <circle cx="120" cy="104" r="2.6" fill="#e8be68" stroke="#141e2e" stroke-width="0.9"/>
+    <circle cx="124" cy="143" r="2.6" fill="#e8be68" stroke="#141e2e" stroke-width="0.9"/>
+    <circle cx="100" cy="179" r="2.6" fill="#e8be68" stroke="#141e2e" stroke-width="0.9"/>
+    <circle cx="56"  cy="175" r="2.6" fill="#e8be68" stroke="#141e2e" stroke-width="0.9"/>
+    <circle cx="38"  cy="139" r="2.6" fill="#e8be68" stroke="#141e2e" stroke-width="0.9"/>
+    <circle cx="48"  cy="101" r="2.6" fill="#e8be68" stroke="#141e2e" stroke-width="0.9"/>
+    <text class="mono-sm" x="82" y="155" text-anchor="middle" style="font-size:9px;fill:#f5f3ee;font-weight:700;">A Δ ≤ b</text>
+    <text class="mono-sm" x="22" y="205" style="font-size:7.8px;fill:#e8be68;">● V-rep &amp; H-rep</text>
+
+    <!-- Right Specs: Dual Geometry & Provenance (x = 172..320) -->
+    <text class="section-label c-fjord" x="172" y="75">DUAL REPRESENTATION</text>
+    <text class="body-text" x="172" y="93">• <tspan class="body-bold">V-rep:</tspan> Extreme vertices</text>
+    <text class="body-text" x="172" y="110">• <tspan class="body-bold">H-rep:</tspan> Facets <tspan class="mono-code">A Δ ≤ b</tspan></text>
+    <text class="body-text" x="172" y="127">• <tspan class="body-bold">Set Ops:</tspan> <tspan class="mono-sm">intersect</tspan>,</text>
+    <text class="body-text" x="182" y="142">slice, Pontryagin erosion</text>
+
+    <line class="divider-rule" x1="172" y1="152" x2="318" y2="152"/>
+    <text class="section-label c-fjord" x="172" y="168">PROVENANCE SIDECAR</text>
+    <text class="body-text" x="172" y="185">• Bit-exact <tspan class="mono-code">float64</tspan> <tspan class="mono-code">.csv</tspan></text>
+    <text class="body-text" x="172" y="201">• SHA-256 <tspan class="mono-code">.json</tspan> sidecar</text>
+    <text class="mono-sm c-fjord fw-bold" x="172" y="216">Polytope.load(path, axes)</text>
+  </g>
+
+  <!-- ====================================================================
+       CONNECTOR IV -> V (MANIFOLD BRANCHING TO 3 DOWNSTREAM STAGES, y = 916..950)
+       ==================================================================== -->
+  <g id="conn-iv-to-v">
+    <!-- Vertical stem from Polytope (x = 701) down to manifold bar (y = 930) -->
+    <line x1="701" y1="916" x2="701" y2="930" stroke="#2c3542" stroke-width="1.8"/>
+    <!-- Horizontal distribution bar across the 3 downstream columns (x = 164..736) -->
+    <line x1="164" y1="930" x2="736" y2="930" stroke="#2c3542" stroke-width="1.8"/>
+    <!-- Left branch down to V-A Compression (x = 164) -->
+    <line x1="164" y1="930" x2="164" y2="942" stroke="#7c2d2d" stroke-width="1.8"/>
+    <polygon points="158.5,940 164,950 169.5,940" fill="#7c2d2d"/>
+    <!-- Center branch down to V-B Validation (x = 450) -->
+    <line x1="450" y1="930" x2="450" y2="942" stroke="#265951" stroke-width="1.8"/>
+    <polygon points="444.5,940 450,950 455.5,940" fill="#265951"/>
+    <!-- Right branch down to V-C Applications (x = 736) -->
+    <line x1="736" y1="930" x2="736" y2="942" stroke="#7c2d2d" stroke-width="1.8"/>
+    <polygon points="730.5,940 736,950 741.5,940" fill="#7c2d2d"/>
+  </g>
+
+  <!-- ====================================================================
+       6. ROW 4: STAGE V — THREE DOWNSTREAM MODULES (y = 950..1066, height = 116)
+       ==================================================================== -->
+  <!-- STAGE V-A: COMPRESSION (x = 32..296, width = 264) -->
+  <g id="stage-va-compression" transform="translate(32, 950)">
+    <rect class="card-base" x="0" y="0" width="264" height="116" rx="6"/>
+    <rect x="0" y="0" width="264" height="4" rx="2" fill="#7c2d2d"/>
+    <text class="stage-num c-brick" x="16" y="22">STAGE V-A  ·  COMPRESSION</text>
+    <text class="card-title-sm" x="16" y="41">Vertex Pruning</text>
+    <text class="module-tag" x="128" y="40">OpenRC.compression</text>
+    <line class="divider-rule" x1="16" y1="49" x2="248" y2="49"/>
+    <text class="body-text" x="16" y="67">• <tspan class="mono-code">local-search</tspan> · <tspan class="mono-code">hybrid-vns</tspan></text>
+    <text class="body-text" x="16" y="85">• <tspan class="mono-code">star-greedy</tspan> &amp; budget schedules</text>
+    <text class="body-text" x="16" y="103">• Compact inner subset <tspan class="mono-code">ℛ_small ⊆ ℛ</tspan></text>
+  </g>
+
+  <!-- STAGE V-B: VALIDATION & CERTIFICATION (x = 318..582, width = 264) -->
+  <g id="stage-vb-validation" transform="translate(318, 950)">
+    <rect class="card-base" x="0" y="0" width="264" height="116" rx="6"/>
+    <rect x="0" y="0" width="264" height="4" rx="2" fill="#265951"/>
+    <text class="stage-num c-verdigris" x="16" y="22">STAGE V-B  ·  VALIDATION</text>
+    <text class="card-title-sm" x="16" y="41">Audit &amp; Inner Proof</text>
+    <text class="module-tag" x="150" y="40">OpenRC.validation</text>
+    <line class="divider-rule" x1="16" y1="49" x2="248" y2="49"/>
+    <text class="body-text" x="16" y="67">• Loss / error / unresolved vs. <tspan class="mono-code">acpf</tspan></text>
+    <text class="body-text" x="16" y="85">• Escalation: <tspan class="mono-code">socp</tspan> → <tspan class="mono-code">exact</tspan> Gurobi</text>
+    <text class="body-text" x="16" y="103">• Certificate: <tspan class="mono-code">verify_inner_region()</tspan></text>
+  </g>
+
+  <!-- STAGE V-C: APPLICATIONS (x = 604..868, width = 264) -->
+  <g id="stage-vc-applications" transform="translate(604, 950)">
+    <rect class="card-base" x="0" y="0" width="264" height="116" rx="6"/>
+    <rect x="0" y="0" width="264" height="4" rx="2" fill="#7c2d2d"/>
+    <text class="stage-num c-brick" x="16" y="22">STAGE V-C  ·  APPLICATIONS</text>
+    <text class="card-title-sm" x="16" y="41">Downstream LPs</text>
+    <text class="module-tag" x="132" y="40">OpenRC.applications</text>
+    <line class="divider-rule" x1="16" y1="49" x2="248" y2="49"/>
+    <text class="body-text" x="16" y="67">• Replaces power flow with <tspan class="mono-code">A Δ ≤ b</tspan></text>
+    <text class="body-text" x="16" y="85">• Grid-aware capacity allocation LP</text>
+    <text class="body-text" x="16" y="103">• Optimal storage sizing without PF</text>
+  </g>
+
+  <!-- ====================================================================
+       7. ARCHITECTURAL SYNTHESIS & MODULAR REGISTRY FOOTER (y = 1080..1194)
+       ==================================================================== -->
+  <line class="inner-brass-rule" x1="18" y1="1079" x2="882" y2="1079"/>
+  <line class="outer-frame" x1="18" y1="1082" x2="882" y2="1082"/>
+  <rect x="19" y="1083" width="862" height="110" fill="#fdfcf9"/>
+
+  <!-- Two-Column Architectural Notes -->
+  <text class="section-label c-amber" x="34" y="1101">ARCHITECTURAL PRINCIPLE I  ·  ORACLE DECOUPLING</text>
+  <text class="body-sm c-slate" x="34" y="1117">
+    Builders only call <tspan class="mono-sm fw-bold">oracle.feasible_at(axes, Δ)</tspan> or <tspan class="mono-sm fw-bold">verdict_at()</tspan>.
+  </text>
+  <text class="body-sm c-slate" x="34" y="1132">
+    Analytic <tspan class="mono-sm">lindistflow</tspan>, <tspan class="mono-sm">socp</tspan>, <tspan class="mono-sm">exact</tspan>, and <tspan class="mono-sm">acopf</tspan> share the same
+  </text>
+  <text class="body-sm c-slate" x="34" y="1147">
+    geometry, seeding, facet-selection, and ray-search implementations.
+  </text>
+
+  <line class="divider-rule" x1="450" y1="1090" x2="450" y2="1152"/>
+
+  <text class="section-label c-fjord" x="466" y="1101">ARCHITECTURAL PRINCIPLE II  ·  THREE-VALUED ADJUDICATION</text>
+  <text class="body-sm c-slate" x="466" y="1117">
+    Numerical non-convergence returns <tspan class="mono-sm fw-bold">INCONCLUSIVE</tspan> rather than a false
+  </text>
+  <text class="body-sm c-slate" x="466" y="1132">
+    infeasibility claim. Growth conservatively excludes undecided points;
+  </text>
+  <text class="body-sm c-slate" x="466" y="1147">
+    validation escalates them through <tspan class="mono-sm">socp</tspan> screening and <tspan class="mono-sm">exact</tspan> global solves.
+  </text>
+
+  <!-- Bottom Registry Bar -->
+  <line class="divider-rule" x1="34" y1="1157" x2="866" y2="1157"/>
+  <text class="mono-sm c-muted fw-bold" x="34" y="1178">REGISTRIES (demo.py list):</text>
+
+  <g transform="translate(204, 1164)">
+    <rect x="0"   y="0" width="66" height="20" rx="3" fill="#eef5f3" stroke="#9ec2bc" stroke-width="1"/>
+    <text class="mono-sm c-verdigris fw-bold" x="33" y="13.5" text-anchor="middle" style="font-size:8.6px;">CASES</text>
+
+    <rect x="74"  y="0" width="74" height="20" rx="3" fill="#fbf6eb" stroke="#dec393" stroke-width="1"/>
+    <text class="mono-sm c-amber fw-bold" x="111" y="13.5" text-anchor="middle" style="font-size:8.6px;">ORACLES</text>
+
+    <rect x="156" y="0" width="78" height="20" rx="3" fill="#edf2f8" stroke="#a6bedb" stroke-width="1"/>
+    <text class="mono-sm c-fjord fw-bold" x="195" y="13.5" text-anchor="middle" style="font-size:8.6px;">BUILDERS</text>
+
+    <rect x="242" y="0" width="64" height="20" rx="3" fill="#edf2f8" stroke="#a6bedb" stroke-width="1"/>
+    <text class="mono-sm c-fjord fw-bold" x="274" y="13.5" text-anchor="middle" style="font-size:8.6px;">SEEDS</text>
+
+    <rect x="314" y="0" width="76" height="20" rx="3" fill="#edf2f8" stroke="#a6bedb" stroke-width="1"/>
+    <text class="mono-sm c-fjord fw-bold" x="352" y="13.5" text-anchor="middle" style="font-size:8.6px;">POLICIES</text>
+
+    <rect x="398" y="0" width="96" height="20" rx="3" fill="#faf0f0" stroke="#dfb4b4" stroke-width="1"/>
+    <text class="mono-sm c-brick fw-bold" x="446" y="13.5" text-anchor="middle" style="font-size:8.6px;">COMPRESSORS</text>
+
+    <rect x="502" y="0" width="76" height="20" rx="3" fill="#eef5f3" stroke="#9ec2bc" stroke-width="1"/>
+    <text class="mono-sm c-verdigris fw-bold" x="540" y="13.5" text-anchor="middle" style="font-size:8.6px;">SAMPLERS</text>
+
+    <rect x="586" y="0" width="76" height="20" rx="3" fill="#faf0f0" stroke="#dfb4b4" stroke-width="1"/>
+    <text class="mono-sm c-brick fw-bold" x="624" y="13.5" text-anchor="middle" style="font-size:8.6px;">APPLICATIONS</text>
+  </g>
+</svg>

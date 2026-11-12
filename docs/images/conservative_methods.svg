@@ -1,0 +1,256 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 900 372" role="img" aria-label="Conservative inner approximation methods">
+  <defs>
+    
+    <!-- Background coordinate grid -->
+    <pattern id="bg-grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M 36 0 L 0 0 0 36" fill="none" stroke="#e6e1d6" stroke-width="0.75"/>
+    </pattern>
+
+    <!-- Diagonal Hatch for Outer Nonlinear Envelope -->
+    <pattern id="envelope-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#265951" stroke-width="1.1" stroke-opacity="0.22"/>
+    </pattern>
+
+    <!-- Card drop shadow -->
+    <filter id="card-shadow" x="-2%" y="-2%" width="104%" height="106%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#1e2530" flood-opacity="0.06"/>
+    </filter>
+
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap');
+
+      .canvas-bg { fill: #f7f5f0; }
+      .outer-frame { fill: none; stroke: #2c3542; stroke-width: 1.5; }
+      .inner-brass-rule { fill: none; stroke: #c5b69e; stroke-width: 0.9; }
+      .divider-rule { stroke: #dcd6c9; stroke-width: 1; fill: none; }
+
+      .card-base {
+        fill: #fdfcf9;
+        stroke: #c6bfb0;
+        stroke-width: 1.2;
+        filter: url(#card-shadow);
+      }
+      .subpanel {
+        fill: #f6f4ee;
+        stroke: #dcd6c8;
+        stroke-width: 1;
+      }
+      .plot-box {
+        fill: #fdfcf9;
+        stroke: #dcd6c8;
+        stroke-width: 1;
+      }
+      .pill-bg {
+        fill: #fdfcf9;
+        fill-opacity: 0.92;
+        stroke: #dcd6c8;
+        stroke-width: 0.8;
+      }
+
+      .kicker {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.8px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        fill: #5c6573;
+      }
+      .stage-num {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.6px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
+      .main-heading {
+        font-family: "Instrument Serif", "Palatino Linotype", "Iowan Old Style", "Baskerville", Georgia, serif;
+        font-size: 18.2px;
+        font-weight: 400;
+        letter-spacing: 0.005em;
+        fill: #1a212b;
+      }
+      .serif-italic {
+        font-family: "Instrument Serif", "Palatino Linotype", "Iowan Old Style", "Baskerville", Georgia, serif;
+        font-style: italic;
+      }
+      .card-title {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        fill: #1a212b;
+      }
+      .card-title-sm {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        fill: #1a212b;
+      }
+      .module-tag {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 10px;
+        font-weight: 500;
+        fill: #5c6573;
+      }
+      .body-text {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 11px;
+        font-weight: 400;
+        fill: #39424e;
+      }
+      .body-sm {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 10.4px;
+        font-weight: 400;
+        fill: #495361;
+      }
+      .mono-code {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 10px;
+        font-weight: 600;
+        fill: #1a212b;
+      }
+      .mono-sm {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.4px;
+        font-weight: 500;
+        fill: #39424e;
+      }
+      .axis-line { stroke: #b8b0a0; stroke-width: 1; stroke-dasharray: 2 2; }
+      .grid-line { stroke: #e4dec8; stroke-width: 1; stroke-dasharray: 2 2; }
+
+      .c-slate     { fill: #1a212b; }
+      .c-muted     { fill: #5c6573; }
+      .c-verdigris { fill: #265951; }
+      .c-amber     { fill: #8c5a0d; }
+      .c-fjord     { fill: #1d3c63; }
+      .c-brick     { fill: #7c2d2d; }
+      .fw-bold     { font-weight: 700; }
+    </style>
+
+    <marker id="arrow-erode" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#7c2d2d"/>
+    </marker>
+    <pattern id="erosion-band" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <line x1="0" y1="0" x2="0" y2="6" stroke="#7c2d2d" stroke-width="1.1" stroke-opacity="0.25"/>
+    </pattern>
+  </defs>
+
+  <!-- 0. BACKGROUND CANVAS & FRAME -->
+  <rect class="canvas-bg" x="0" y="0" width="900" height="372" rx="6"/>
+  <rect x="12" y="12" width="876" height="348" fill="url(#bg-grid)"/>
+  <rect class="outer-frame" x="12" y="12" width="876" height="348" rx="4"/>
+  <rect class="inner-brass-rule" x="16" y="16" width="868" height="340" rx="2"/>
+
+  <!-- ==================== LEFT CARD: PAIR 1 (METHOD 1) ==================== -->
+  <g transform="translate(28, 26)">
+    <rect class="card-base" x="0" y="0" width="412" height="320" rx="6"/>
+    <rect x="0" y="0" width="412" height="4" rx="2" fill="#8c5a0d"/>
+
+    <text class="stage-num c-amber" x="18" y="23">PAIR 1  ·  METHOD 1 (DEFAULT: PATH SCOPE)</text>
+    <text class="card-title" x="18" y="43">Intersect &amp; Pontryagin Shift</text>
+    <text class="module-tag" x="394" y="42" text-anchor="end">method="intersect-shift"</text>
+
+    <rect class="subpanel" x="18" y="52" width="376" height="26" rx="4"/>
+    <text class="mono-sm c-slate fw-bold" x="206" y="69" text-anchor="middle">R₁ = ( C^I [lindistflow]  ∩  C^II [lindistflow-vdrop] )  ⊖  B_loss</text>
+
+    <!-- Geometric Canvas Left -->
+    <rect class="plot-box" x="18" y="85" width="376" height="168" rx="4"/>
+    <line x1="30" y1="172" x2="382" y2="172" class="axis-line"/>
+    <line x1="196" y1="93" x2="196" y2="245" class="axis-line"/>
+
+    <!-- True AC Feasible Set Omega_AC -->
+    <path d="M 74 164 C 78 114, 156 102, 234 106 C 304 110, 336 144, 326 190 C 316 228, 234 236, 154 230 C 96 224, 70 198, 74 164 Z"
+          fill="url(#envelope-hatch)" stroke="#265951" stroke-width="1.6" stroke-dasharray="5 3"/>
+
+    <!-- Model I: lindistflow (exceeds right/top slightly) -->
+    <polygon points="88,160 144,106 272,108 344,156 314,222 146,228"
+             fill="none" stroke="#1d3c63" stroke-width="1.4" stroke-dasharray="4 2"/>
+
+    <!-- Model II: lindistflow-vdrop (shifted voltage bracket) -->
+    <polygon points="72,170 128,116 250,112 320,164 298,230 130,232"
+             fill="none" stroke="#8c5a0d" stroke-width="1.4" stroke-dasharray="4 2"/>
+
+    <!-- Unshifted Intersection C_bar = C^I cap C^II (erosion collar) -->
+    <polygon points="88,164 138,116 250,112 320,164 298,224 146,228"
+             fill="url(#erosion-band)" stroke="#7c2d2d" stroke-width="1" stroke-dasharray="2 2"/>
+
+    <!-- Inner Eroded Polytope R_1 -->
+    <polygon points="110,166 152,128 236,126 286,164 270,210 156,214"
+             fill="#265951" fill-opacity="0.22" stroke="#265951" stroke-width="2.2"/>
+    <circle cx="196" cy="172" r="3.5" fill="#c88a28" stroke="#1a212b" stroke-width="1"/>
+    <text x="202" y="167" class="mono-sm c-slate fw-bold">0</text>
+    <text x="206" y="195" text-anchor="middle" class="mono-code c-verdigris">Certified R₁ ⊂ Ω_AC</text>
+
+    <!-- Pontryagin Erosion Arrows (-B_loss) -->
+    <line x1="242" y1="113" x2="233" y2="124" stroke="#7c2d2d" stroke-width="1.5" marker-end="url(#arrow-erode)"/>
+    <line x1="316" y1="164" x2="290" y2="164" stroke="#7c2d2d" stroke-width="1.5" marker-end="url(#arrow-erode)"/>
+    <line x1="288" y1="220" x2="273" y2="211" stroke="#7c2d2d" stroke-width="1.5" marker-end="url(#arrow-erode)"/>
+
+    <!-- Corner Pill Labels -->
+    <rect class="pill-bg" x="24" y="91" width="136" height="17" rx="3"/>
+    <text x="30" y="103" class="mono-sm c-fjord fw-bold">--- C^I (lindistflow)</text>
+    <rect class="pill-bg" x="282" y="91" width="106" height="17" rx="3"/>
+    <text x="288" y="103" class="mono-sm c-verdigris fw-bold">--- True Ω_AC</text>
+    <rect class="pill-bg" x="24" y="230" width="168" height="17" rx="3"/>
+    <text x="30" y="242" class="mono-sm c-amber fw-bold">--- C^II (lindistflow-vdrop)</text>
+    <rect class="pill-bg" x="270" y="230" width="118" height="17" rx="3"/>
+    <text x="276" y="242" class="mono-sm c-brick fw-bold">→ −B_loss erosion</text>
+
+    <!-- Bottom Explanations -->
+    <text x="18" y="271" class="body-text"><tspan class="fw-bold c-slate">1. Voltage bracket:</tspan> Intersects <tspan class="mono-sm">C^I</tspan> &amp; <tspan class="mono-sm">C^II</tspan> to bracket branch voltage drop.</text>
+    <text x="18" y="290" class="body-text"><tspan class="fw-bold c-slate">2. Loss erosion:</tspan> Tightens each facet by <tspan class="mono-sm">∑ max(0, a_k s_k)</tspan> (+ 2^k Q slices).</text>
+    <text x="18" y="309" class="body-text"><tspan class="fw-bold c-verdigris">9bus / 247:</tspan> <tspan class="mono-code">238.08 MW³</tspan> volume · certified at <tspan class="mono-code">91.06%</tspan> max loading.</text>
+  </g>
+
+  <!-- ==================== RIGHT CARD: PAIR 2 (METHOD 2) ==================== -->
+  <g transform="translate(460, 26)">
+    <rect class="card-base" x="0" y="0" width="412" height="320" rx="6"/>
+    <rect x="0" y="0" width="412" height="4" rx="2" fill="#1d3c63"/>
+
+    <text class="stage-num c-fjord" x="18" y="23">PAIR 2  ·  METHOD 2 (DIRECT INTERSECTION)</text>
+    <text class="card-title" x="18" y="43">Direct Tightened Intersection</text>
+    <text class="module-tag" x="394" y="42" text-anchor="end">method="tight-intersect"</text>
+
+    <rect class="subpanel" x="18" y="52" width="376" height="26" rx="4"/>
+    <text class="mono-sm c-slate fw-bold" x="206" y="69" text-anchor="middle">R₂ = C^I_tight [tight-voltage]  ∩  C^II_tight [tight-flow]</text>
+
+    <!-- Geometric Canvas Right -->
+    <rect class="plot-box" x="18" y="85" width="376" height="168" rx="4"/>
+    <line x1="30" y1="172" x2="382" y2="172" class="axis-line"/>
+    <line x1="196" y1="93" x2="196" y2="245" class="axis-line"/>
+
+    <!-- True AC Feasible Set Omega_AC -->
+    <path d="M 74 164 C 78 114, 156 102, 234 106 C 304 110, 336 144, 326 190 C 316 228, 234 236, 154 230 C 96 224, 70 198, 74 164 Z"
+          fill="url(#envelope-hatch)" stroke="#265951" stroke-width="1.6" stroke-dasharray="5 3"/>
+
+    <!-- Model I tight: tight-voltage (tight on top/bottom voltage, slightly wider on right flow) -->
+    <polygon points="96,166 150,122 262,126 334,170 268,218 144,220"
+             fill="none" stroke="#1d3c63" stroke-width="1.4" stroke-dasharray="4 2"/>
+
+    <!-- Model II tight: tight-flow (tight on left/right flow, slightly taller on top voltage) -->
+    <polygon points="114,158 202,102 260,112 292,174 260,214 134,212"
+             fill="none" stroke="#8c5a0d" stroke-width="1.4" stroke-dasharray="4 2"/>
+
+    <!-- Direct Intersection R_2 (strictly inside Omega_AC) -->
+    <polygon points="114,158 156,122 256,126 292,174 260,214 144,213"
+             fill="#1d3c63" fill-opacity="0.20" stroke="#1d3c63" stroke-width="2.2"/>
+    <circle cx="196" cy="172" r="3.5" fill="#c88a28" stroke="#1a212b" stroke-width="1"/>
+    <text x="202" y="167" class="mono-sm c-slate fw-bold">0</text>
+    <text x="198" y="192" text-anchor="middle" class="mono-code c-fjord">Certified R₂ (no shift)</text>
+
+    <!-- Corner Pill Labels -->
+    <rect class="pill-bg" x="24" y="91" width="168" height="17" rx="3"/>
+    <text x="30" y="103" class="mono-sm c-fjord fw-bold">--- C^I_tight (tight-voltage)</text>
+    <rect class="pill-bg" x="282" y="91" width="106" height="17" rx="3"/>
+    <text x="288" y="103" class="mono-sm c-verdigris fw-bold">--- True Ω_AC</text>
+    <rect class="pill-bg" x="24" y="230" width="156" height="17" rx="3"/>
+    <text x="30" y="242" class="mono-sm c-amber fw-bold">--- C^II_tight (tight-flow)</text>
+    <rect class="pill-bg" x="258" y="230" width="130" height="17" rx="3"/>
+    <text x="264" y="242" class="mono-sm c-fjord fw-bold">✓ Direct C^I ∩ C^II</text>
+
+    <!-- Bottom Explanations -->
+    <text x="18" y="271" class="body-text"><tspan class="fw-bold c-slate">1. Embedded bounds:</tspan> <tspan class="mono-sm">tight-voltage</tspan> &amp; <tspan class="mono-sm">tight-flow</tspan> bound drop &amp; loss.</text>
+    <text x="18" y="290" class="body-text"><tspan class="fw-bold c-slate">2. Direct intersection:</tspan> <tspan class="mono-sm">C^I_tight ∩ C^II_tight</tspan> avoids post-intersection slice builds.</text>
+    <text x="18" y="309" class="body-text"><tspan class="fw-bold c-fjord">9bus / 247:</tspan> <tspan class="mono-code">95.37 MW³</tspan> volume · certified at <tspan class="mono-code">70.62%</tspan> max loading.</text>
+  </g>
+</svg>

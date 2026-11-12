@@ -1,0 +1,276 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 900 372" role="img" aria-label="Seed geometry, ray growth and live-hull compression">
+  <defs>
+    
+    <!-- Background coordinate grid -->
+    <pattern id="bg-grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M 36 0 L 0 0 0 36" fill="none" stroke="#e6e1d6" stroke-width="0.75"/>
+    </pattern>
+
+    <!-- Diagonal Hatch for Outer Nonlinear Envelope -->
+    <pattern id="envelope-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#265951" stroke-width="1.1" stroke-opacity="0.22"/>
+    </pattern>
+
+    <!-- Card drop shadow -->
+    <filter id="card-shadow" x="-2%" y="-2%" width="104%" height="106%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#1e2530" flood-opacity="0.06"/>
+    </filter>
+
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap');
+
+      .canvas-bg { fill: #f7f5f0; }
+      .outer-frame { fill: none; stroke: #2c3542; stroke-width: 1.5; }
+      .inner-brass-rule { fill: none; stroke: #c5b69e; stroke-width: 0.9; }
+      .divider-rule { stroke: #dcd6c9; stroke-width: 1; fill: none; }
+
+      .card-base {
+        fill: #fdfcf9;
+        stroke: #c6bfb0;
+        stroke-width: 1.2;
+        filter: url(#card-shadow);
+      }
+      .subpanel {
+        fill: #f6f4ee;
+        stroke: #dcd6c8;
+        stroke-width: 1;
+      }
+      .plot-box {
+        fill: #fdfcf9;
+        stroke: #dcd6c8;
+        stroke-width: 1;
+      }
+      .pill-bg {
+        fill: #fdfcf9;
+        fill-opacity: 0.92;
+        stroke: #dcd6c8;
+        stroke-width: 0.8;
+      }
+
+      .kicker {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.8px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        fill: #5c6573;
+      }
+      .stage-num {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.6px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
+      .main-heading {
+        font-family: "Instrument Serif", "Palatino Linotype", "Iowan Old Style", "Baskerville", Georgia, serif;
+        font-size: 18.2px;
+        font-weight: 400;
+        letter-spacing: 0.005em;
+        fill: #1a212b;
+      }
+      .serif-italic {
+        font-family: "Instrument Serif", "Palatino Linotype", "Iowan Old Style", "Baskerville", Georgia, serif;
+        font-style: italic;
+      }
+      .card-title {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        fill: #1a212b;
+      }
+      .card-title-sm {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        fill: #1a212b;
+      }
+      .module-tag {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 10px;
+        font-weight: 500;
+        fill: #5c6573;
+      }
+      .body-text {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 11px;
+        font-weight: 400;
+        fill: #39424e;
+      }
+      .body-sm {
+        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", -apple-system, sans-serif;
+        font-size: 10.4px;
+        font-weight: 400;
+        fill: #495361;
+      }
+      .mono-code {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 10px;
+        font-weight: 600;
+        fill: #1a212b;
+      }
+      .mono-sm {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 9.4px;
+        font-weight: 500;
+        fill: #39424e;
+      }
+      .axis-line { stroke: #b8b0a0; stroke-width: 1; stroke-dasharray: 2 2; }
+      .grid-line { stroke: #e4dec8; stroke-width: 1; stroke-dasharray: 2 2; }
+
+      .c-slate     { fill: #1a212b; }
+      .c-muted     { fill: #5c6573; }
+      .c-verdigris { fill: #265951; }
+      .c-amber     { fill: #8c5a0d; }
+      .c-fjord     { fill: #1d3c63; }
+      .c-brick     { fill: #7c2d2d; }
+      .fw-bold     { font-weight: 700; }
+    </style>
+
+    <marker id="arr-pine" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#265951"/>
+    </marker>
+    <marker id="arr-rust" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#7c2d2d"/>
+    </marker>
+  </defs>
+
+  <!-- 0. BACKGROUND CANVAS & FRAME -->
+  <rect class="canvas-bg" x="0" y="0" width="900" height="372" rx="6"/>
+  <rect x="12" y="12" width="876" height="348" fill="url(#bg-grid)"/>
+  <rect class="outer-frame" x="12" y="12" width="876" height="348" rx="4"/>
+  <rect class="inner-brass-rule" x="16" y="16" width="868" height="340" rx="2"/>
+
+  <!-- ==================== CARD I: SEED GEOMETRY ==================== -->
+  <g transform="translate(28, 26)">
+    <rect class="card-base" x="0" y="0" width="268" height="320" rx="6"/>
+    <rect x="0" y="0" width="268" height="4" rx="2" fill="#1d3c63"/>
+
+    <text class="stage-num c-fjord" x="16" y="23">STEP I  ·  SEED GEOMETRY</text>
+    <text class="card-title-sm" x="16" y="43">Axis vs. Simplex Seed</text>
+    <text class="module-tag" x="252" y="42" text-anchor="end">seed="auto"</text>
+
+    <rect class="plot-box" x="16" y="52" width="236" height="168" rx="4"/>
+    <line x1="26" y1="140" x2="242" y2="140" class="axis-line"/>
+    <line x1="134" y1="64" x2="134" y2="212" class="axis-line"/>
+
+    <!-- Top Pill Legend -->
+    <rect class="pill-bg" x="22" y="58" width="104" height="17" rx="3"/>
+    <text x="28" y="70" class="mono-sm c-fjord fw-bold">■ axis (2d rays)</text>
+    <rect class="pill-bg" x="142" y="58" width="104" height="17" rx="3"/>
+    <text x="148" y="70" class="mono-sm c-brick fw-bold">▲ simplex (d+1)</text>
+
+    <!-- True boundary -->
+    <ellipse cx="134" cy="144" rx="84" ry="54" fill="url(#envelope-hatch)" stroke="#265951" stroke-width="1.3" stroke-dasharray="4 3"/>
+
+    <!-- Axis cross-polytope -->
+    <polygon points="134,90 218,144 134,198 50,144" fill="#1d3c63" fill-opacity="0.16" stroke="#1d3c63" stroke-width="1.8"/>
+
+    <!-- One-sided simplex seed -->
+    <polygon points="134,90 218,144 102,168" fill="#7c2d2d" fill-opacity="0.22" stroke="#7c2d2d" stroke-width="1.6" stroke-dasharray="3 2"/>
+
+    <!-- Random Sobol cloud dots -->
+    <circle cx="96" cy="120" r="2.5" fill="#265951"/>
+    <circle cx="170" cy="118" r="2.5" fill="#265951"/>
+    <circle cx="176" cy="162" r="2.5" fill="#265951"/>
+    <circle cx="90" cy="160" r="2.5" fill="#265951"/>
+    <circle cx="134" cy="144" r="3.5" fill="#c88a28" stroke="#1a212b" stroke-width="0.9"/>
+
+    <rect class="subpanel" x="16" y="228" width="236" height="78" rx="4"/>
+    <text x="26" y="246" class="mono-code c-slate">Axis / Simplex Volume Ratio:</text>
+    <text x="26" y="264" class="mono-sm c-muted">3-D / 5-D</text>
+    <text x="242" y="264" text-anchor="end" class="mono-sm c-fjord fw-bold">1.3×  /  21×</text>
+    <text x="26" y="282" class="mono-sm c-muted">8-D / 16-D</text>
+    <text x="242" y="282" text-anchor="end" class="mono-sm c-brick fw-bold">2,410×  /  27,900×</text>
+    <text x="26" y="299" class="body-sm">Default <tspan class="mono-sm">seed="auto"</tspan> picks <tspan class="mono-sm">axis</tspan> (d ≥ 4).</text>
+  </g>
+
+  <!-- Step Chevron 1 -> 2 -->
+  <circle cx="306" cy="186" r="7" fill="#fdfcf9" stroke="#c5b69e" stroke-width="1"/>
+  <path d="M 304 182.5 L 308.5 186 L 304 189.5" fill="none" stroke="#2c3542" stroke-width="1.4"/>
+
+  <!-- ==================== CARD II: RAY GROWTH & POLISH ==================== -->
+  <g transform="translate(316, 26)">
+    <rect class="card-base" x="0" y="0" width="268" height="320" rx="6"/>
+    <rect x="0" y="0" width="268" height="4" rx="2" fill="#265951"/>
+
+    <text class="stage-num c-verdigris" x="16" y="23">STEP II  ·  RAY &amp; RELOCATION</text>
+    <text class="card-title-sm" x="16" y="43">Grow-and-Polish Engine</text>
+    <text class="module-tag" x="252" y="42" text-anchor="end">ray-growth</text>
+
+    <rect class="plot-box" x="16" y="52" width="236" height="168" rx="4"/>
+    <rect class="pill-bg" x="22" y="58" width="110" height="17" rx="3"/>
+    <text x="28" y="70" class="mono-sm c-brick fw-bold">↷ ∇_τ Vol polish</text>
+    <rect class="pill-bg" x="138" y="58" width="108" height="17" rx="3"/>
+    <text x="144" y="70" class="mono-sm c-verdigris fw-bold">● v_new (ITP ray)</text>
+
+    <!-- Boundary curve -->
+    <path d="M 34 202 C 32 122, 98 88, 180 96 C 232 102, 242 158, 222 206" fill="none" stroke="#265951" stroke-width="1.6" stroke-dasharray="4 3"/>
+
+    <!-- Current hull -->
+    <polygon points="54,196 80,130 172,136 210,200" fill="#1d3c63" fill-opacity="0.15" stroke="#1d3c63" stroke-width="1.7"/>
+    <!-- New Cone Gain Delta V -->
+    <polygon points="80,130 148,95 172,136" fill="#265951" fill-opacity="0.28" stroke="#265951" stroke-width="1.8"/>
+    <text x="115" y="123" text-anchor="middle" class="mono-sm c-verdigris fw-bold">+ΔV</text>
+
+    <!-- Outward ray n_f & boundary hit -->
+    <line x1="126" y1="133" x2="146" y2="99" stroke="#265951" stroke-width="1.6" marker-end="url(#arr-pine)"/>
+    <circle cx="148" cy="95" r="3.8" fill="#265951" stroke="#fdfcf9" stroke-width="1.1"/>
+
+    <!-- Tangential Jacobi volume-gradient relocation -->
+    <path d="M 80 130 Q 70 114 62 108" fill="none" stroke="#7c2d2d" stroke-width="1.6" marker-end="url(#arr-rust)"/>
+    <path d="M 172 136 Q 190 124 202 120" fill="none" stroke="#7c2d2d" stroke-width="1.6" marker-end="url(#arr-rust)"/>
+    <text x="132" y="174" text-anchor="middle" class="mono-code c-fjord">Active Hull P_k</text>
+
+    <rect class="subpanel" x="16" y="228" width="236" height="78" rx="4"/>
+    <text x="26" y="246" class="mono-code c-slate">Bandit &amp; Relocation Gains:</text>
+    <text x="26" y="264" class="mono-sm c-muted">adaptive-gradient</text>
+    <text x="242" y="264" text-anchor="end" class="mono-sm c-verdigris fw-bold">1.00 ray / round</text>
+    <text x="26" y="282" class="mono-sm c-muted">refresh_gains=True</text>
+    <text x="242" y="282" text-anchor="end" class="mono-sm c-fjord fw-bold">+107× vol (8-D)</text>
+    <text x="26" y="299" class="body-sm"><tspan class="mono-sm">grow-and-polish</tspan> adds +102% to +136%.</text>
+  </g>
+
+  <!-- Step Chevron 2 -> 3 -->
+  <circle cx="594" cy="186" r="7" fill="#fdfcf9" stroke="#c5b69e" stroke-width="1"/>
+  <path d="M 592 182.5 L 596.5 186 L 592 189.5" fill="none" stroke="#2c3542" stroke-width="1.4"/>
+
+  <!-- ==================== CARD III: COMPRESSION ==================== -->
+  <g transform="translate(604, 26)">
+    <rect class="card-base" x="0" y="0" width="268" height="320" rx="6"/>
+    <rect x="0" y="0" width="268" height="4" rx="2" fill="#7c2d2d"/>
+
+    <text class="stage-num c-brick" x="16" y="23">STEP III  ·  COMPRESSION</text>
+    <text class="card-title-sm" x="16" y="43">LiveHull Pruning</text>
+    <text class="module-tag" x="252" y="42" text-anchor="end">compress_live</text>
+
+    <rect class="plot-box" x="16" y="52" width="236" height="168" rx="4"/>
+    <rect class="pill-bg" x="46" y="58" width="176" height="17" rx="3"/>
+    <text x="134" y="70" text-anchor="middle" class="mono-sm c-brick fw-bold">● Pruned v*_i (min ΔV_i star)</text>
+
+    <!-- Retained compressed hull -->
+    <polygon points="44,170 76,106 168,102 222,150 190,204 86,206"
+             fill="#1d3c63" fill-opacity="0.18" stroke="#1d3c63" stroke-width="2"/>
+    <text x="134" y="160" text-anchor="middle" class="mono-code c-fjord">Retained P_comp ⊂ P</text>
+
+    <!-- Pruned vertex star wedge -->
+    <polygon points="76,106 124,84 168,102" fill="#c88a28" fill-opacity="0.32" stroke="#7c2d2d" stroke-width="1.6" stroke-dasharray="3 2"/>
+    <circle cx="124" cy="84" r="4" fill="#7c2d2d" stroke="#fdfcf9" stroke-width="1.1"/>
+
+    <!-- Retained vertices -->
+    <circle cx="44" cy="170" r="3.4" fill="#1d3c63"/>
+    <circle cx="76" cy="106" r="3.4" fill="#1d3c63"/>
+    <circle cx="168" cy="102" r="3.4" fill="#1d3c63"/>
+    <circle cx="222" cy="150" r="3.4" fill="#1d3c63"/>
+    <circle cx="190" cy="204" r="3.4" fill="#1d3c63"/>
+    <circle cx="86" cy="206" r="3.4" fill="#1d3c63"/>
+
+    <rect class="subpanel" x="16" y="228" width="236" height="78" rx="4"/>
+    <text x="26" y="246" class="mono-code c-slate">In-Place Memory Governance:</text>
+    <text x="26" y="264" class="mono-sm c-muted">Exact / Screened</text>
+    <text x="242" y="264" text-anchor="end" class="mono-sm c-amber fw-bold">min marginal ΔV_i</text>
+    <text x="26" y="282" class="mono-sm c-muted">star-screened (8-D)</text>
+    <text x="242" y="282" text-anchor="end" class="mono-sm c-verdigris fw-bold">3.2×–3.9× faster</text>
+    <text x="26" y="299" class="body-sm">Enforces hard <tspan class="mono-sm">budget_mb</tspan> &amp; price cap.</text>
+  </g>
+</svg>

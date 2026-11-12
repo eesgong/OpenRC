@@ -1,0 +1,10 @@
+bus,name,vn_kv,vm_min_pu,vm_max_pu,is_slack
+0,Bus 1,10.5,0.9,1.1,False
+1,Bus 2,10.5,0.9,1.1,False
+2,Bus 3,10.5,0.9,1.1,False
+3,Bus 4,10.5,0.9,1.1,False
+4,Bus 5,10.5,0.9,1.1,False
+5,Bus 6,10.5,0.9,1.1,False
+6,Bus 7,10.5,0.9,1.1,False
+7,Bus 8,10.5,0.9,1.1,False
+8,Bus 9,10.5,0.9,1.1,True

@@ -1,0 +1,23 @@
+# Core dependencies
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0,<3
+pandapower>=2.13
+psutil>=5.9         # process RSS monitoring (memory_limit_mb)
+
+# Algebraic modelling layer
+pyomo>=6.6
+
+# Optional commercial solvers (install when licensed):
+#   mosek>=10.0
+#   gurobipy>=10.0
+#
+# Solver requirements by OpenRC.powerflow oracle:
+#   lindistflow, lindistflow-vdrop, tight-voltage, tight-flow
+#                       -> none (analytic default); MOSEK or Gurobi for backend="solver"
+#   socp                -> MOSEK or Gurobi
+#   exact, and global surface certification -> Gurobi
+#   acpf, dcpf, acopf, dcopf -> none (pandapower)
+
+# Optional plotting
+matplotlib>=3.7     # OpenRC.viz
