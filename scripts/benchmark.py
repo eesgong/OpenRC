@@ -103,6 +103,7 @@ def main(argv=None):
                          progress=None if args.quiet else
                          (lambda msg: print("  " + msg, file=sys.stderr, flush=True)))
     if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         runs.to_csv(args.out, index=False)
     baseline = args.baseline or args.methods[0]
     summary = summarize(runs, baseline=baseline, confidence=args.confidence)

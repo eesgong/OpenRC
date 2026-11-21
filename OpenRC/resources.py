@@ -247,11 +247,13 @@ def extrapolate_vertex_budget(observed: Sequence[tuple], dim: int,
     k, log_a = np.polyfit(logs_n, logs_f, 1)
     if not (np.isfinite(k) and np.isfinite(log_a)) or k < -1e-12:
         raise ValueError("observations must support a finite, non-decreasing facet model")
+    from OpenRC.geometry.live_hull import live_hull_bytes_per_facet
+
     k = max(float(k), 0.0)
-    facet_bytes = 8 * (dim + 1) + 8 * dim
+    facet_bytes = live_hull_bytes_per_facet(int(dim))
 
     def fits(n: int) -> bool:
-        remaining = limit_mb - (16 * n * dim + 4 * n) / 2 ** 20
+        remaining = limit_mb - (8.0 * n * int(dim)) / 2 ** 20
         if remaining <= 0.0:
             return False
         # Stay in log space: a can underflow while N**k overflows even when

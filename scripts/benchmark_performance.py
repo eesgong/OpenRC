@@ -464,6 +464,7 @@ def main(argv=None):
         print(f"_{section}: {time.perf_counter() - start:.0f} s_\n", flush=True)
     print(f"_total: {time.perf_counter() - total:.0f} s_", file=sys.stderr)
     if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         with open(args.out, "w") as handle:
             json.dump(record, handle, default=lambda o: o.name if hasattr(o, "name")
                       else float(o) if isinstance(o, (np.floating, np.integer)) else str(o),

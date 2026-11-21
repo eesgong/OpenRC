@@ -251,6 +251,35 @@ def _voltage_envelope(
     return lo, hi, True
 
 
+def _effective_sgen_pq(net, live):
+    """Return ``(p_series, q_series)`` for in-service ``sgen`` rows after PF clipping."""
+    import inspect
+    import pandapower as pp
+
+    p_vals = live["p_mw"] if "p_mw" in live.columns else None
+    q_vals = live["q_mvar"] if "q_mvar" in live.columns else None
+    clips_sgen = "enforce_p_lims" in inspect.signature(pp.runpp).parameters
+    options = net.get("user_pf_options", {}) if clips_sgen and hasattr(net, "get") else {}
+    if not isinstance(options, dict):
+        options = {}
+    if p_vals is not None and options.get("enforce_p_lims", False):
+        p_vals = p_vals.clip(lower=live.get("min_p_mw"), upper=live.get("max_p_mw"))
+    if q_vals is not None and options.get("enforce_q_lims", False):
+        lower = live.get("min_q_mvar", q_vals * 0.0 + np.nan).copy()
+        upper = live.get("max_q_mvar", q_vals * 0.0 + np.nan).copy()
+        if "q_capability_characteristic" in net:
+            from pandapower.build_gen import (
+                _calculate_qmin_qmax_from_q_capability_characteristics,
+            )
+
+            curves = _calculate_qmin_qmax_from_q_capability_characteristics(net, "sgen")
+            if curves is not None and not curves.empty:
+                lower.update(curves.min_q_mvar)
+                upper.update(curves.max_q_mvar)
+        q_vals = q_vals.clip(lower=lower, upper=upper)
+    return p_vals, q_vals
+
+
 # --------------------------------------------------------------------------
 # the adapter
 # --------------------------------------------------------------------------
@@ -264,8 +293,8 @@ def case_from_pandapower(
     transformer_handling: str = "auto",
     s_base_mva: float = 1.0,
     reference_kv: Optional[float] = None,
-    vm_min_pu: float = 0.9,
-    vm_max_pu: float = 1.1,
+    vm_min_pu: Optional[float] = None,
+    vm_max_pu: Optional[float] = None,
     feeder: Optional[int] = None,
     default_rating_ka: Optional[float] = None,
     slack_vm_pu: Optional[Union[float, str]] = None,
@@ -301,7 +330,9 @@ def case_from_pandapower(
         Per-unit base for the collapse, and the voltage the result is expressed
         at.  ``reference_kv=None`` picks the level carrying the most buses.
     vm_min_pu, vm_max_pu:
-        Fallback voltage envelope, used when the network does not state one.
+        Explicit voltage envelope overrides applied across all non-infeed buses
+        when given; ``None`` (default) uses ``net.bus`` limits when stated and
+        falls back to ``0.9`` / ``1.1`` p.u. otherwise.
     feeder:
         Keep only the ``feeder``-th independently fed part of the network.  A
         network with several infeeds - ``mv_oberrhein`` has two substations,
@@ -351,10 +382,13 @@ def case_from_pandapower(
             or not np.isfinite(load_scale)
             or load_scale < 0.0):
         raise ValueError(f"load_scale must be finite and non-negative, got {load_scale!r}")
-    if (isinstance(vm_min_pu, (bool, np.bool_))
-            or isinstance(vm_max_pu, (bool, np.bool_))
-            or not (np.isfinite(vm_min_pu) and np.isfinite(vm_max_pu)
-                    and 0.0 < vm_min_pu < vm_max_pu)):
+    if (vm_min_pu is not None and isinstance(vm_min_pu, (bool, np.bool_))
+            or vm_max_pu is not None and isinstance(vm_max_pu, (bool, np.bool_))):
+        raise ValueError("voltage limits must be finite and satisfy 0 < min < max")
+    fallback_min = 0.9 if vm_min_pu is None else float(vm_min_pu)
+    fallback_max = 1.1 if vm_max_pu is None else float(vm_max_pu)
+    if not (np.isfinite(fallback_min) and np.isfinite(fallback_max)
+            and 0.0 < fallback_min < fallback_max):
         raise ValueError("voltage limits must be finite and satisfy 0 < min < max")
     if transformer_handling not in TRANSFORMER_HANDLING:
         raise ValueError(
@@ -412,7 +446,7 @@ def case_from_pandapower(
     before = None
     if transformer_handling == "auto" and n_trafo:
         before = radiality_report(net, line_charging=line_charging)
-        _, _, common_vm = _voltage_envelope(net, vm_min_pu, vm_max_pu)
+        _, _, common_vm = _voltage_envelope(net, fallback_min, fallback_max)
         # Collapsing turns a transformer into a line; it changes no connectivity,
         # so it only helps when the network is a single-infeed tree with no
         # other elements outside the DistFlow model.
@@ -454,14 +488,30 @@ def case_from_pandapower(
         scaling = live["scaling"].to_numpy(dtype=float) if "scaling" in live.columns \
             else np.ones(len(live))
         scaling = np.where(np.isfinite(scaling), scaling, 1.0)
+        if table == "sgen":
+            sgen_p, sgen_q = _effective_sgen_pq(net, live)
+            buses = live["bus"].to_numpy(dtype=int)
+            if sgen_p is not None:
+                p_arr = np.where(np.isfinite(sgen_p.to_numpy(dtype=float)),
+                                 sgen_p.to_numpy(dtype=float), 0.0)
+                np.add.at(base_p, buses, sign * p_arr * scaling)
+            if sgen_q is not None:
+                q_arr = np.where(np.isfinite(sgen_q.to_numpy(dtype=float)),
+                                 sgen_q.to_numpy(dtype=float), 0.0)
+                np.add.at(base_q, buses, sign * q_arr * scaling)
+            continue
         for row, scale in zip(live.itertuples(), scaling):
             bus = int(row.bus)
             base_p[bus] += sign * _finite_or(getattr(row, "p_mw", 0.0), 0.0) * scale
             base_q[bus] += sign * _finite_or(getattr(row, "q_mvar", 0.0), 0.0) * scale
 
-    lo, hi, has_common_voltage_envelope = _voltage_envelope(
-        net, vm_min_pu, vm_max_pu
+    net_lo, net_hi, has_common_voltage_envelope = _voltage_envelope(
+        net, fallback_min, fallback_max
     )
+    lo = float(vm_min_pu) if vm_min_pu is not None else net_lo
+    hi = float(vm_max_pu) if vm_max_pu is not None else net_hi
+    if not 0.0 < lo < hi:
+        raise ValueError("voltage limits must be finite and satisfy 0 < min < max")
     if not has_common_voltage_envelope:
         # Record _openrc_distflow_unsupported so DistFlow rejects incompatible
         # per-bus voltage intervals while AC/DC/OPF retain native per-bus limits.

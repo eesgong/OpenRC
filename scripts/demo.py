@@ -332,6 +332,7 @@ def cmd_pp(args) -> None:
               f"{int((table.radial == True).sum())} radial (DistFlow applies), "  # noqa: E712
               f"{int((table.radial == False).sum())} for AC/DC/OPF")  # noqa: E712
         if args.out:
+            Path(args.out).parent.mkdir(parents=True, exist_ok=True)
             table.to_csv(args.out, index=False)
             print(f"  saved -> {args.out}")
         return
@@ -387,12 +388,17 @@ def cmd_conservative(args) -> None:
                            max_oracle_calls=args.max_oracle_calls,
                            memory_limit_mb=args.memory_limit_mb)
 
-    recipes: list[tuple[str, dict[str, Any]]] = [
-        ("M1 intersect-shift (path)", dict(method="intersect-shift")),
-        ("M1 direct-feeder scope", dict(method="intersect-shift",
-                                         shift_scope="feeding_branch")),
-        ("M2 tight-intersect", dict(method="tight-intersect")),
+    all_recipes: list[tuple[str, str, dict[str, Any]]] = [
+        ("m1", "M1 intersect-shift (path)", dict(method="intersect-shift")),
+        ("m1-direct", "M1 direct-feeder scope", dict(method="intersect-shift",
+                                                     shift_scope="feeding_branch")),
+        ("m2", "M2 tight-intersect", dict(method="tight-intersect")),
+        ("m2-subtree", "M2 subtree (recommended)", dict(method="tight-intersect",
+                                                        tighten_scope="subtree")),
     ]
+    recipes = [(label, kwargs) for key, label, kwargs in all_recipes
+               if args.method in ("all", key)]
+    runs = {}
     details = {}
     for label, kwargs in recipes:
         try:
@@ -412,20 +418,23 @@ def cmd_conservative(args) -> None:
         if run.polytope.volume <= 0:
             print(f"  {label}: EMPTY region on this network")
             continue
+        runs[label] = run
         regions[label] = run.polytope
         details[label] = run.builder_info
 
     print(f"\n  {'construction':<26} {'models intersected':<34} {'shift':<6} "
-          f"{'vertices':>9} {'volume':>11}")
+          f"{'theorem':<8} {'vertices':>9} {'volume':>11}")
     print(f"  {'model1 (no guarantee)':<26} {'lindistflow':<34} {'-':<6} "
-          f"{base.polytope.n_vertices:>9} {base.polytope.volume:>11.3f}")
+          f"{'no':<8} {base.polytope.n_vertices:>9} {base.polytope.volume:>11.3f}")
     for label, region in regions.items():
         info = details[label]
         pair = f"{info['model_a']} + {info['model_b']}"
         shift = "yes" if info["shift_applied"] else "no"
+        theorem = "yes" if info.get("theorem_backed") else "no"
         print(f"  {label:<26} {pair:<34} {shift:<6} "
-              f"{region.n_vertices:>9} {region.volume:>11.3f}")
+              f"{theorem:<8} {region.n_vertices:>9} {region.volume:>11.3f}")
 
+    runs = {"model1 (no guarantee)": base, **runs}
     regions = {"model1 (no guarantee)": base.polytope, **regions}
 
     if args.certify:
@@ -466,17 +475,20 @@ def cmd_conservative(args) -> None:
                 verdict = "undecided (no decided in-region sample)"
             else:
                 verdict = "no sampled violation"
-            print(f"  {label:<30} {100 * quality.error_rate:>9.3f} "
-                  f"{100 * quality.loss_rate:>9.3f} "
+            err_text = (f"{100 * quality.error_rate:9.3f}"
+                        if quality.n_decided_in_region else f"{'n/a':>9}")
+            loss_text = (f"{'n/a':>9}" if np.isnan(quality.loss_rate)
+                         else f"{100 * quality.loss_rate:9.3f}")
+            print(f"  {label:<30} {err_text} {loss_text} "
                   f"{quality.n_unresolved_total:>11}  {verdict}")
             if quality.n_unresolved_total:
                 print("      NOTE: unresolved points need manual confirmation "
                       "(excluded from the error rate)")
 
     if args.out:
-        for label, region in regions.items():
-            region.metadata["provenance"] = _case_provenance(case, args)
-            region.save(Path(args.out) / _default_stem(case, axes, label))
+        for label, run_obj in runs.items():
+            run_obj.builder_info["provenance"] = _case_provenance(case, args)
+            run_obj.save(Path(args.out) / _default_stem(case, axes, label))
         print(f"    saved -> {args.out}")
 
 
@@ -494,7 +506,7 @@ def cmd_compress(args) -> None:
     print("  " + result.summary())
     if args.out:
         path = Path(args.out) / (Path(args.region).stem + f"_{args.method}_{args.target}")
-        saved = result.polytope.save(path)
+        saved = result.save(path)
         print(f"    saved -> {saved}")
 
 
@@ -551,6 +563,11 @@ def cmd_bench_policy(args) -> None:
 
 def cmd_memory(args) -> None:
     """Build a high-dimensional region under a vertex/memory budget."""
+    if args.budget_mb is not None and args.schedule not in ("memory-budget", "adaptive"):
+        raise SystemExit(
+            f"--budget-mb applies only to --schedule memory-budget or adaptive, "
+            f"got {args.schedule!r}"
+        )
     case, axes = _load_case_axes(args)
     _rule(f"memory-aware build on {case.name} / {axes.label()} ({len(axes)}-D)")
     with _oracle(args, case) as oracle:
@@ -591,6 +608,7 @@ def cmd_validate(args) -> None:
     quality = orc.evaluate_region(
         region, case, axes,
         reference=args.reference,
+        adjudicate=not args.no_adjudicate,
         n_samples=args.samples,
         sampler=args.sampler,
         sampler_kwargs={"margin": args.margin} if "box" in args.sampler else None,
@@ -819,6 +837,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("conservative", help="compare the inner-approximation methods")
     add_common(p)
+    p.add_argument("--method", default="all",
+                   choices=("all", "m2-subtree", "m2", "m1", "m1-direct"),
+                   help="run every conservative construction or one selected recipe")
     p.add_argument("--policy", default="adaptive-ema")
     p.add_argument("--seed", default="simplex")
     p.add_argument("--seed-samples", type=int, default=150)
@@ -887,7 +908,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-vertices", type=int, default=150)
     p.add_argument("--target-vertices", type=int, default=75)
     p.add_argument("--rounds", type=int, default=4)
-    p.add_argument("--memory-limit", type=float, default=None, help="MiB")
+    p.add_argument("--memory-limit", "--memory-limit-mb", dest="memory_limit",
+                   type=float, default=None, help="MiB")
     add_parallel(p)
     p.add_argument("--out", default=None, help="directory to save into")
     p.set_defaults(func=cmd_memory)
@@ -896,6 +918,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(p)
     p.add_argument("--region", required=True)
     p.add_argument("--reference", default="acpf")
+    p.add_argument("--no-adjudicate", action="store_true",
+                   help="skip solver adjudication of candidate violations")
     p.add_argument("--samples", type=_positive_int, default=1000)
     p.add_argument("--sampler", default="uniform-box",
                    choices=[n for n, _ in orc.list_samplers() if n != "scenarios"])

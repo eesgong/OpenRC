@@ -181,7 +181,8 @@ class RadialSweep:
             Interval.point(np.array([br.x_ohm for br in branches])) / z_base)
         self._iabs_z_hi = self._iz.abs_hi()
         rated = np.array([br.rated for br in branches], dtype=bool)
-        limit = (Interval.point(np.array([br.i_max_a for br in branches])) / i_base).lo
+        limit = (Interval.point(np.array([br.i_max_a if br.rated else 0.0 for br in branches]))
+                 / i_base).lo
         self._ii_max_lo = np.where(rated, limit, np.inf)
         self._iscale = Interval.point(1.0e6) / Interval.point(s_base_va)
 

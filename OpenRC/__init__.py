@@ -143,7 +143,7 @@ from OpenRC.validation import (
     verify_inner_region,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "APPLICATIONS", "Application", "BatchResult", "SolveResult",

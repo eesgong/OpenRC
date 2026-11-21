@@ -401,11 +401,17 @@ class GridCase:
         injections, including recovery from zero load. Net and base-vector
         changes belong in ``case_from_pandapower`` instead, so this helper
         cannot change the two representations independently. Registry recipes
-        are retained; non-reproducible variants use the safe serial fallback.
+        are updated for factory-supported knobs; non-reproducible variants use
+        the safe serial fallback.
         """
         if {"net", "base_p_mw", "base_q_mvar"}.intersection(changes):
             raise ValueError("use case_from_pandapower(net, ...) to rebuild network/base injections")
         self.assert_unchanged()
+        recipe_knobs = {"load_scale", "line_charging", "axis_presets", "description"}
+        if (self.registry_name and self.registry_name == self.name
+                and "factory_kwargs" not in changes
+                and set(changes) <= recipe_knobs):
+            changes = dict(changes, factory_kwargs=dict(self.factory_kwargs, **changes))
         return replace(self, **changes)
 
     # ------------------------------------------------------------- basic info

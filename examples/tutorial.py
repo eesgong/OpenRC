@@ -8,6 +8,8 @@
 
 Each step is a self-contained function that prints what it does and why; the
 quick start is also a fast check that an installation works.
+For the recommended theorem-conditions + audit + LP acceptance workflow, run
+``python examples/quickstart.py``. This tutorial also explores legacy models.
 
 Sign and unit convention
 ------------------------
@@ -242,11 +244,15 @@ def step_7_conservative() -> None:
         ("M1 intersect-shift", dict(method="intersect-shift")),
         ("M1 direct-feeder scope",
          dict(method="intersect-shift", shift_scope="feeding_branch")),
-        ("M2 tight-intersect", dict(method="tight-intersect")),
+        ("M2 paper scope", dict(method="tight-intersect")),
+        ("M2 subtree (recommended)",
+         dict(method="tight-intersect", oracle_kwargs={"tighten_scope": "subtree"})),
     ]
     for label, kwargs in recipes:
-        regions[label] = ConservativeBuilder(inner_builder=inner, **kwargs).build(
-            case, axes, max_vertices=120).polytope
+        run = ConservativeBuilder(inner_builder=inner, **kwargs).build(
+            case, axes, max_vertices=120)
+        regions[label] = run.polytope
+        print(f"\n  {label}:\n{run.summary()}")
 
     # One common sampling box keeps the loss rates strictly comparable.
     lower, upper = base.bounding_box(2.0)
@@ -649,6 +655,8 @@ def main() -> None:
 
     if args.all and args.steps:
         parser.error("choose either explicit step numbers or --all")
+    if any(number < 1 or number > len(STEPS) for number in args.steps):
+        parser.error(f"step numbers must be between 1 and {len(STEPS)}")
 
     orc.configure_logging(logging.INFO if args.verbose else logging.WARNING)
     chosen = (range(1, len(STEPS) + 1) if args.all else

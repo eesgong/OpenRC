@@ -53,7 +53,7 @@ from OpenRC.geometry.live_hull import (
     parallel_map,
 )
 from OpenRC.region.base import (BUILDERS, RegionBuilder, RegionResult, _RAY_OPTIONS, get_seed,
-                                check_hull_budget, resolve_seed)
+                                check_hull_budget, resolve_seed, single_oracle_guarantee)
 from OpenRC.registry import Registry
 from OpenRC.utils import LOGGER, MemoryBudgetExceeded, MemoryGuard
 
@@ -1524,6 +1524,7 @@ class RayGrowthBuilder(RegionBuilder):
                 "hull": dict(live.stats, n_facets=live.n_facets,
                              hull_mb=round(live.memory_mb(), 3)),
                 "cached_rays": run.counts["cached_rays"], "tabu_skips": run.counts["tabu"],
+                "guarantee": single_oracle_guarantee(oracle), "theorem_backed": False,
             },
             seconds=time.perf_counter() - start,
             stopped_because=stopped,

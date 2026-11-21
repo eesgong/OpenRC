@@ -56,7 +56,7 @@ from typing import Any, List, Optional, Tuple
 import numpy as np
 
 from OpenRC.geometry.polytope import Polytope
-from OpenRC.region.base import BUILDERS, RegionBuilder, RegionResult
+from OpenRC.region.base import BUILDERS, RegionBuilder, RegionResult, single_oracle_guarantee
 from OpenRC.utils import LOGGER, MemoryBudgetExceeded
 
 
@@ -166,7 +166,7 @@ class MemoryAwareBuilder(RegionBuilder):
 
             inner_builder = ExpansiveBuilder()
         elif not callable(getattr(inner_builder, "build", None)):
-            raise TypeError("inner_builder must have a callable build(oracle, axes, ...) method")
+            raise TypeError("inner_builder must have a callable build(case, axes, oracle, ...) method")
         self.inner_builder = inner_builder
         self._compressor_arg = compressor
         self._schedule_arg = schedule
@@ -518,14 +518,6 @@ class MemoryAwareBuilder(RegionBuilder):
         assert best is not None and last is not None
         # Only the vertex set leaves this builder; the hull was released above.
         polytope = Polytope.with_known_volume(best["vertices"], best["volume"], axes=axes)
-        result = RegionResult(
-            polytope=polytope,
-            trace=combined_trace,
-            oracle_stats=oracle.stats.as_dict() | oracle.describe(),
-            builder_info=dict(last.builder_info),
-            seconds=time.perf_counter() - start,
-            stopped_because=stopped or best["stopped"],
-        )
         screen_report = None
         if self.facet_screen is not None:
             screen_report = dict(self.facet_screen.report())
@@ -533,7 +525,8 @@ class MemoryAwareBuilder(RegionBuilder):
                 screen_report["screened"] = screened_total
             if "excluded" in screen_report:
                 screen_report["excluded"] = excluded_total
-        result.builder_info.update(
+        info = dict(last.builder_info)
+        info.update(
             builder=self.name,
             inner_builder=getattr(self.inner_builder, "name", str(self.inner_builder)),
             compressor=getattr(compressor, "name", str(compressor)),
@@ -550,8 +543,17 @@ class MemoryAwareBuilder(RegionBuilder):
             screen=screen_report,
             facet_screen=screen_report,
             refiner=self.refiner.report() if self.refiner is not None else None,
+            guarantee=single_oracle_guarantee(oracle),
+            theorem_backed=False,
         )
-        return result
+        return RegionResult(
+            polytope=polytope,
+            trace=combined_trace,
+            oracle_stats=oracle.stats.as_dict() | oracle.describe(),
+            builder_info=info,
+            seconds=time.perf_counter() - start,
+            stopped_because=stopped or best["stopped"],
+        )
 
 
 def _fingerprint(vertices: np.ndarray) -> bytes:

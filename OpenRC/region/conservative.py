@@ -61,7 +61,8 @@ more conservative and S1's tightening can empty the region on feeders with
 high-reactance, high-rating branches (see
 :meth:`DistFlowOracle.binding_tightening`).
 
-With ``oracle_kwargs={"tighten_scope": "subtree"}`` S1 tightens each branch by
+With ``tighten_scope="subtree"`` (or ``oracle_kwargs={"tighten_scope": "subtree"}``)
+S1 tightens each branch by
 the largest losses of its own subtree, ``D``, and checks the lossless flow at
 the lowest permissible voltage, ``|S^LL| <= (I_max - |D| / V_min) V_min``.
 That is an argument (:func:`method2_covers_losses`).  For every loss vector
@@ -82,6 +83,7 @@ from __future__ import annotations
 
 import math
 import time
+import warnings
 from contextlib import ExitStack
 from typing import Optional
 
@@ -91,6 +93,7 @@ from OpenRC.geometry.bisection import InfeasibleOriginError
 from OpenRC.geometry.ops import clip_to_box, intersect
 from OpenRC.geometry.polytope import Polytope
 from OpenRC.powerflow.base import FeasibilityOracle, Verdict, get_oracle
+from OpenRC.powerflow.distflow import TIGHTEN_SCOPES
 from OpenRC.region.base import BUILDERS, RegionBuilder, RegionResult
 from OpenRC.utils import LOGGER
 
@@ -138,6 +141,12 @@ class ConservativeBuilder(RegionBuilder):
         Only for ``intersect-shift``.  Which branches' losses the shift absorbs:
         ``"path"`` (default; complete upstream path) or ``"feeding_branch"``
         (direct-feeder only).  See :meth:`_axis_shifts`.
+    tighten_scope:
+        Only for ``tight-intersect``.  Loss-accumulation scope passed to S1:
+        ``"subtree"`` (recommended; makes Method 2 ``theorem_backed`` under
+        non-negative impedances and slack above ``v_min``), ``"upstream"``, or
+        ``"upstream_legacy"``.  Defaults to ``None`` (uses ``oracle_kwargs`` or
+        ``DistFlowOracle``'s default ``"upstream"``).
     intersect_method:
         ``"halfspace"`` for the exact intersection, ``"vertex_filter"`` for
         the inner approximation used to reproduce published numbers (see
@@ -146,9 +155,8 @@ class ConservativeBuilder(RegionBuilder):
         Optional ``(lower, upper)`` arrays applied as a final box clip - the
         step that re-imposes each POC's own rating.
     oracle_kwargs:
-        Passed to both component models, for example
-        ``{"tighten_scope": "subtree"}`` for the Method-2 S1 scope that makes
-        the result ``theorem_backed`` (see the module docstring).
+        Passed to both component models (e.g. ``backend="solver"`` or
+        ``{"tighten_scope": "subtree"}``).
     certify:
         Run global limit bounds plus the existence proof (or, where the
         contraction condition fails, the surface checks) on the final region,
@@ -167,6 +175,7 @@ class ConservativeBuilder(RegionBuilder):
         method: str = "intersect-shift",
         inner_builder=None,
         shift_scope: str = "path",
+        tighten_scope: Optional[str] = None,
         intersect_method: str = "halfspace",
         poc_limits: Optional[tuple] = None,
         oracle_kwargs: Optional[dict] = None,
@@ -182,6 +191,15 @@ class ConservativeBuilder(RegionBuilder):
             raise ValueError(
                 f"shift_scope must be 'feeding_branch' or 'path', got {shift_scope!r}"
             )
+        if tighten_scope is not None:
+            if tighten_scope not in TIGHTEN_SCOPES:
+                raise ValueError(
+                    f"tighten_scope must be one of {TIGHTEN_SCOPES}, got {tighten_scope!r}"
+                )
+            if method != "tight-intersect":
+                raise ValueError(
+                    f"tighten_scope applies only to method='tight-intersect', got {method!r}"
+                )
         if intersect_method not in ("halfspace", "vertex_filter"):
             raise ValueError("intersect_method must be 'halfspace' or 'vertex_filter', "
                              f"got {intersect_method!r}")
@@ -220,11 +238,18 @@ class ConservativeBuilder(RegionBuilder):
             if unknown:
                 raise TypeError(f"unknown certify_kwargs {unknown}; accepted: "
                                 f"{', '.join(sorted(accepted))}")
+        oracle_opts = dict(oracle_kwargs or {})
+        if tighten_scope is not None:
+            if ("tighten_scope" in oracle_opts
+                    and oracle_opts["tighten_scope"] != tighten_scope):
+                raise ValueError("tighten_scope conflicts with oracle_kwargs['tighten_scope']")
+            oracle_opts["tighten_scope"] = tighten_scope
         self.method = method
         self.shift_scope = shift_scope
         self.intersect_method = intersect_method
         self.poc_limits = poc_limits
-        self.oracle_kwargs = dict(oracle_kwargs or {})
+        self.oracle_kwargs = oracle_opts
+        self.tighten_scope = self.oracle_kwargs.get("tighten_scope")
         self.certify = bool(certify)
         self.certify_kwargs = certify_kwargs
         if inner_builder is None:
@@ -247,10 +272,10 @@ class ConservativeBuilder(RegionBuilder):
 
         validate_case_configuration(case)
         if oracle is not None:
-            LOGGER.info(
-                "conservative builder ignores the supplied oracle; method %r selects "
-                "its own pair of models", self.method,
-            )
+            msg = (f"conservative builder ignores the supplied oracle; method {self.method!r} "
+                   "selects its own pair of models")
+            warnings.warn(msg, UserWarning, stacklevel=2)
+            LOGGER.info(msg)
         start = time.perf_counter()
         if self.poc_limits is not None and self.poc_limits[0].shape != (len(axes),):
             raise ValueError(f"poc_limits have {self.poc_limits[0].size} entries for "

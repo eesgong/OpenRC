@@ -583,6 +583,8 @@ def _model_compatibility(source: Any, reference: Any) -> Tuple[bool, str]:
     # and is therefore redundant even for an arbitrary allowed phase angle.
     v_nom = float(case.v_nom_kv) * 1e3 / math.sqrt(3.0)
     for branch in case.topology.unrated_branches:
+        if math.isinf(branch.i_max_a):
+            continue
         impedance = math.hypot(branch.r_ohm, branch.x_ohm)
         parent_max = (case.slack_vm_pu if branch.parent == case.slack_bus
                       else case.vm_max_pu)
@@ -615,6 +617,7 @@ def _reference_evidence(oracle: Any, answer: Verdict, *, reference: Any = None,
 
 
 _ORACLE_ALIASES = {
+    "distflow": "lindistflow",
     "method2-1": "tight-voltage",
     "method2-2": "tight-flow",
     "method2-1-script": "legacy-tight-voltage",

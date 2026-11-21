@@ -51,7 +51,7 @@ from OpenRC.geometry.live_hull import LiveHull, cone_volumes
 from OpenRC.geometry.ops import GeometryNumericsError
 from OpenRC.geometry.measures import simplex_volume
 from OpenRC.region.base import (BUILDERS, RegionBuilder, RegionResult, check_hull_budget,
-                                get_seed, resolve_seed)
+                                get_seed, resolve_seed, single_oracle_guarantee)
 from OpenRC.region.facet_policy import (
     FacetPolicy,
     SelectionContext,
@@ -705,6 +705,8 @@ class ExpansiveBuilder(RegionBuilder):
                 "tabu_skips": n_tabu,
                 "screen": screen.report() if screen is not None else None,
                 "initial_debt": float(debts.sum()),
+                "guarantee": single_oracle_guarantee(oracle),
+                "theorem_backed": False,
             },
             seconds=time.perf_counter() - wall_start,
             stopped_because=stopped,

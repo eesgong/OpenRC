@@ -191,32 +191,23 @@ def random_instances(case: str, dims: Iterable[int], seeds: Iterable[int], *,
     instances: List[Instance] = []
     if not dims or not seeds:
         return instances
-    probe = (orc.get_oracle(oracle, grid, **oracle_kwargs)
-             if require_feasible_origin else None)
-    try:
-        for dim in dims:
-            for seed in seeds:
-                rng = np.random.default_rng([int(seed), int(dim)])
-                for _ in range(max_draws):
-                    labels = tuple(sorted(rng.choice(pool, size=dim, replace=False).tolist(),
-                                          key=lambda s: (int(s[:-1]), s[-1])))
-                    instance = Instance(case, labels, oracle, int(seed),
-                                        _freeze_kwargs(case_kwargs),
-                                        _freeze_kwargs(oracle_kwargs))
-                    if not require_feasible_origin:
-                        break
-                    assert probe is not None
-                    probe.reset_warm_state()
-                    axes = grid.resolve_axes(list(labels))
-                    if probe.feasible_at(axes, np.zeros(dim)):
-                        break
-                else:
-                    raise RuntimeError(f"no feasible base point in {max_draws} draws of {dim} "
-                                       f"axes of {case!r} (seed {seed})")
-                instances.append(instance)
-    finally:
-        if probe is not None:
-            probe.close()
+    if require_feasible_origin:
+        with orc.get_oracle(oracle, grid, **oracle_kwargs) as probe:
+            probe_axes = grid.resolve_axes([pool[0]])
+            if not probe.feasible_at(probe_axes, np.zeros(1)):
+                raise RuntimeError(
+                    f"base operating point of {case!r} is infeasible under {oracle!r}"
+                )
+    for dim in dims:
+        for seed in seeds:
+            rng = np.random.default_rng([int(seed), int(dim)])
+            labels = tuple(sorted(rng.choice(pool, size=dim, replace=False).tolist(),
+                                  key=lambda s: (int(s[:-1]), s[-1])))
+            instances.append(
+                Instance(case, labels, oracle, int(seed),
+                         _freeze_kwargs(case_kwargs),
+                         _freeze_kwargs(oracle_kwargs))
+            )
     return instances
 
 
@@ -339,11 +330,13 @@ def _run_one(instance: Instance, name: str, method: Union[str, Method],
                                axes=" ".join(instance.axes), oracle=instance.oracle,
                                method=name, max_vertices=budget, instance_id=instance_id)
     oracle = None
+    reported_calls = 0
     start = time.perf_counter()
     try:
         case, axes, oracle = instance.build()
         result = _resolve(method)(case, axes, oracle, max_vertices=budget,
                                   seed=instance.seed)
+        reported_calls = int(result.oracle_stats.get("n_calls", 0) or 0)
         row.update(volume=result.volume, vertices=result.n_vertices,
                    stopped=result.stopped_because, error="")
     except Exception as exc:          # recorded, see run_benchmark
@@ -357,7 +350,8 @@ def _run_one(instance: Instance, name: str, method: Union[str, Method],
                 if not row.get("error"):
                     row.update(volume=math.nan, vertices=0, stopped="",
                                error=f"{type(exc).__name__}: {exc}")
-    row.update(oracle_calls=0 if oracle is None else oracle.stats.n_calls,
+    calls = 0 if oracle is None else (oracle.stats.n_calls or reported_calls)
+    row.update(oracle_calls=calls,
                seconds=time.perf_counter() - start)
     return row
 
@@ -399,7 +393,8 @@ def mean_interval(values: Union[Sequence[float], np.ndarray],
     return Interval(mean, mean - half, mean + half, n)
 
 
-def ratio_interval(ratios: Sequence[float], confidence: float = 0.95) -> Interval:
+def ratio_interval(ratios: Union[Sequence[float], np.ndarray],
+                   confidence: float = 0.95) -> Interval:
     """Geometric-mean ratio with a t-interval on the log scale, and the win rate.
 
     The mean and interval need a finite positive ratio.  The win rate counts
@@ -453,19 +448,34 @@ def summarize(runs, *, metric: str = "volume", baseline: Optional[str] = None,
         raise KeyError(f"baseline method {baseline!r} is not present in runs")
     # Normalize NaN error entries produced when reading benchmark CSVs via pandas.
     ok = runs[runs["error"].fillna("").astype(str) == ""]
+    multi_oracle = "oracle" in ok.columns and ok["oracle"].nunique() > 1
+    group_cols = ["case", "oracle", "dim", "method"] if multi_oracle else ["case", "dim", "method"]
     rows = []
-    for (case, dim, method), group in ok.groupby(["case", "dim", "method"], sort=False):
+    for group_key, group in ok.groupby(group_cols, sort=False):
+        if multi_oracle:
+            case, oracle_val, dim, method = group_key
+        else:
+            case, dim, method = group_key
+            oracle_val = None
         stat = mean_interval(group[metric].to_numpy(), confidence)
         row: Dict[str, Any] = dict(case=case, dim=dim, method=method, n=stat.n,
                                    mean=stat.estimate, ci_low=stat.low, ci_high=stat.high,
                                    calls=float(group["oracle_calls"].mean()),
                                    seconds=float(group["seconds"].mean()))
+        if multi_oracle:
+            row["oracle"] = oracle_val
         if baseline is not None:
-            base = ok[(ok["case"] == case) & (ok["dim"] == dim) & (ok["method"] == baseline)]
-            keys = ["instance_id"] if "instance_id" in ok else ["seed", "axes"]
+            base_mask = (ok["case"] == case) & (ok["dim"] == dim) & (ok["method"] == baseline)
+            if multi_oracle:
+                base_mask = base_mask & (ok["oracle"] == oracle_val)
+            base = ok[base_mask]
+            keys = (["instance_id"] if "instance_id" in ok
+                    else (["seed", "axes", "oracle"] if "oracle" in ok else ["seed", "axes"]))
             paired = group.merge(base, on=keys, suffixes=("", "_base"), validate="one_to_one")
+            num = paired[metric].to_numpy(dtype=float)
+            den = paired[f"{metric}_base"].to_numpy(dtype=float)
             with np.errstate(divide="ignore", invalid="ignore"):
-                ratios = (paired[metric] / paired[f"{metric}_base"]).to_numpy()
+                ratios = np.where((num == 0.0) & (den == 0.0), 1.0, num / den)
             ratio = ratio_interval(ratios, confidence)
             if not higher_is_better:
                 with np.errstate(divide="ignore"):
@@ -475,7 +485,10 @@ def summarize(runs, *, metric: str = "volume", baseline: Optional[str] = None,
                        tie_rate=ratio.extra.get("tie_rate", math.nan),
                        ratio_excluded=int(ratio.extra.get("n_excluded", 0)))
         rows.append(row)
-    columns = ["case", "dim", "method", "n", "mean", "ci_low", "ci_high", "calls", "seconds"]
+    columns = (["case", "oracle", "dim", "method"] if multi_oracle
+               else ["case", "dim", "method"]) + [
+        "n", "mean", "ci_low", "ci_high", "calls", "seconds"
+    ]
     if baseline is not None:
         columns += ["ratio", "ratio_low", "ratio_high", "win_rate", "tie_rate", "ratio_excluded"]
     return pd.DataFrame(rows, columns=columns)

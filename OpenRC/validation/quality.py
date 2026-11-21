@@ -83,8 +83,8 @@ class RegionQuality:
 
     n_samples: int
     n_in_region: int              # N_R
-    n_feasible: int               # N_D (proven feasible, anywhere in the sample)
-    n_both: int                   # N_RD (proven feasible and in the region)
+    n_feasible: int               # N_D (accepted by the reference/adjudicator, anywhere)
+    n_both: int                   # N_RD (reference-feasible and in the region)
     n_unresolved_in_region: int = 0
     n_unresolved_total: int = 0
     violating_points: np.ndarray = field(default_factory=lambda: np.empty((0, 0)))
@@ -162,6 +162,16 @@ class RegionQuality:
         return self.n_decided_in_region > 0 and self.n_confirmed_violations == 0
 
     # --------------------------------------------------------------- reporting
+    def __repr__(self) -> str:
+        ref = self.info.get("reference", "unspecified")
+        err = f"{100 * self.error_rate:.3f}%" if self.n_decided_in_region else "n/a"
+        loss = (f"{100 * self.loss_rate:.3f}%"
+                if self.loss_measured and self.n_feasible else "n/a")
+        return (
+            f"RegionQuality(reference={ref!r}, n_samples={self.n_samples}, "
+            f"n_in_region={self.n_in_region}, error_rate={err}, loss_rate={loss})"
+        )
+
     def summary(self) -> str:
         err_lo, err_hi = self.error_rate_ci
         loss_lo, loss_hi = self.loss_rate_ci
@@ -182,15 +192,23 @@ class RegionQuality:
 
         lines = [
             f"region quality over {self.n_samples} samples ({self.seconds:.1f} s)",
+            f"    reference: {self.info.get('reference', 'unspecified')}"
+            f"; sampling evidence, not a global certificate",
             f"    in region          N_R  = {self.n_in_region}"
             f"  (decided {self.n_decided_in_region}, unresolved {self.n_unresolved_in_region})",
-            f"    proven feasible    N_D  = {self.n_feasible}",
+            f"    reference feasible N_D  = {self.n_feasible}",
             f"    both               N_RD = {self.n_both}",
-            f"    error rate (1-P_RD) = {100 * self.error_rate:.3f}%  "
+            f"    error denominator  = {self.n_decided_in_region} decided in-region samples"
+            f" / {self.n_samples} total draws",
+            (f"    error rate (1-P_RD) = {100 * self.error_rate:.3f}%  "
             f"{error_interval}"
-            f"   ({self.n_confirmed_violations} confirmed violation(s))",
+            f"   ({self.n_confirmed_violations} confirmed violation(s))"
+             if self.n_decided_in_region else
+             "    error rate (1-P_RD) = not estimated: no decided in-region samples"),
             (f"    loss  rate (1-P_R)  = {100 * self.loss_rate:.3f}%  "
-             f"{loss_interval}" if self.loss_measured else
+             f"{loss_interval}" if self.loss_measured and self.n_feasible else
+             "    loss  rate (1-P_R)  = not estimated: no feasible reference samples"
+             if self.loss_measured else
              "    loss  rate (1-P_R)  = not measured: the sampler draws only points of "
              "the region"),
             f"    verdict: {verdict}",

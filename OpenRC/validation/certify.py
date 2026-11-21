@@ -767,7 +767,12 @@ def shrink_to_certified(
         chosen = given
     full = certify_inner_region(region, case, axes, **certify_kwargs)
     if full.certified:
-        return region, full, 1.0
+        certified_region = region.replace(
+            certified=True,
+            certified_contraction=1.0,
+            certificate=full.as_dict(),
+        )
+        return certified_region, full, 1.0
 
     if chosen is None:
         origin = np.zeros(region.dim)
@@ -819,7 +824,12 @@ def shrink_to_certified(
         if cert.certified:
             cert.notes.append(f"region contracted by lam = {lam:.4f} towards "
                               f"{np.round(centre_arr, 4).tolist()} to obtain this certificate")
-            return shrunk, cert, lam
+            certified_shrunk = shrunk.replace(
+                certified=True,
+                certified_contraction=lam,
+                certificate=cert.as_dict(),
+            )
+            return certified_shrunk, cert, lam
         lam = lam - max(rel_tol, 0.05 * lam)
     if lo == 0.0:
         cause = (f"the limit bounds failed for every probed contraction, so the contraction "

@@ -119,7 +119,7 @@ class Refiner(ABC):
         released; the result carries the same number of vertices or fewer.
         """
         from OpenRC.compression.base import polytope_from_live
-        from OpenRC.geometry.polytope import Polytope
+        from OpenRC.geometry.polytope import Polytope, _strip_region_claims
 
         if not isinstance(polytope, Polytope):
             raise TypeError(f"polytope must be a Polytope, got {type(polytope).__name__}")
@@ -137,7 +137,7 @@ class Refiner(ABC):
             describe = getattr(oracle, "describe", None)
             if callable(describe):
                 summary["oracle"] = describe()
-            refined.metadata = dict(polytope.metadata) | {"refinement": summary}
+            refined.metadata = _strip_region_claims(polytope.metadata) | {"refinement": summary}
             return refined, info
         finally:
             live.release()

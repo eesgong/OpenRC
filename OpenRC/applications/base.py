@@ -75,6 +75,13 @@ class BatchResult:
 
         return pd.DataFrame([r.as_dict() for r in self.results])
 
+    def __repr__(self) -> str:
+        app = self.info.get("application", "application")
+        return (
+            f"BatchResult(application={app!r}, solved={self.n_solved}/{len(self.results)}, "
+            f"mean_objective={self.mean_objective:.4g}, mean_ms={self.mean_ms:.3f})"
+        )
+
     def summary(self) -> str:
         n_constraints = (self.region_n_facets if self.region_n_constraints is None
                          else self.region_n_constraints)

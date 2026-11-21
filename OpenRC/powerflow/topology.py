@@ -50,20 +50,24 @@ UNRATED_MVA_THRESHOLD = 9000.0
 
 
 def effective_line_current_ka(row) -> float:
-    """Usable current of a pandapower line, including derating and parallels.
+    """Usable current of a pandapower line, including derating, parallels and loading cap.
 
     ``max_i_ka`` is the rating of one circuit.  Pandapower applies ``df`` as a
-    derating factor and ``parallel`` as the number of identical circuits; the
-    DistFlow topology must use the same effective limit.
+    derating factor and ``parallel`` as the number of identical circuits, and
+    OpenRC's AC/DC and branch-flow models enforce ``min(100, max_loading_percent)``.
     """
     rating = float(row.max_i_ka)
     raw_derating = getattr(row, "df", 1.0)
     raw_parallel = getattr(row, "parallel", 1.0)
+    raw_loading = getattr(row, "max_loading_percent", 100.0)
     derating = (1.0 if raw_derating is None or not math.isfinite(float(raw_derating))
                 else float(raw_derating))
     parallel = (1.0 if raw_parallel is None or not math.isfinite(float(raw_parallel))
                 or float(raw_parallel) <= 0.0 else float(raw_parallel))
-    return rating * derating * parallel
+    loading = (min(100.0, float(raw_loading)) / 100.0
+               if raw_loading is not None and math.isfinite(float(raw_loading))
+               and float(raw_loading) >= 0.0 else 1.0)
+    return rating * derating * parallel * loading
 
 
 def unrated_lines(net) -> List[int]:
@@ -197,8 +201,8 @@ class RadialityReport:
             reasons.append(
                 f"it has {self.n_infeeds} infeeds (external grids), and a branch-flow "
                 "model has a single root; a network fed from several substations is "
-                "not one radial feeder (extract a single feeder with "
-                "pandapower.toolbox.select_subnet to use DistFlow on it)"
+                "not one radial feeder (pass feeder=<index> to get_case / "
+                "case_from_pandapower, or list_feeders(net), to extract a single feeder)"
             )
         if self.n_loops:
             reasons.append(
@@ -627,6 +631,9 @@ class RadialTopology:
                 if child in visited:
                     continue
                 visited.add(child)
+                raw_i_max_a = float(
+                    i_max_ka[row] * derating[row] * parallel[row] * loading[row] * 1000.0
+                )
                 branches.append(
                     Branch(
                         index=int(line_index[row]),
@@ -637,8 +644,7 @@ class RadialTopology:
                         r_ohm=float(r_km[row] * length[row] / parallel[row]),
                         x_ohm=float(x_km[row] * length[row] / parallel[row]),
                         # pandapower stores kA; DistFlow is written in amperes
-                        i_max_a=float(i_max_ka[row] * derating[row]
-                                      * parallel[row] * loading[row] * 1000.0),
+                        i_max_a=raw_i_max_a if math.isfinite(raw_i_max_a) else math.inf,
                         rated=int(line_index[row]) not in unrated,
                         reversed_in_net=(int(f_bus[row]) != parent),
                     )

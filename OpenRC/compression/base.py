@@ -60,7 +60,8 @@ import threading
 import time
 from abc import ABC
 from dataclasses import dataclass, field
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Union
 
 import numpy as np
 
@@ -119,6 +120,14 @@ class CompressionResult:
 
         return pd.DataFrame(self.trace)
 
+    def __repr__(self) -> str:
+        comp = self.info.get("compressor", "compression")
+        return (
+            f"CompressionResult(compressor={comp!r}, "
+            f"vertices={self.original_n_vertices}->{self.polytope.n_vertices}, "
+            f"volume_loss_pct={self.volume_loss_pct:.3f}, seconds={self.seconds:.2f})"
+        )
+
     def summary(self) -> str:
         return (
             f"{self.info.get('compressor', 'compression')}: "
@@ -126,6 +135,17 @@ class CompressionResult:
             f"({self.size_reduction_pct:.1f}% smaller), "
             f"{self.volume_loss_pct:.3f}% hypervolume lost, {self.seconds:.2f} s"
         )
+
+    def save(self, path: Union[str, Path]) -> Path:
+        """Persist the compressed polytope (CSV + JSON) and pruning trace side by side."""
+        stem = Path(path)
+        if stem.suffix.lower() in (".csv", ".json"):
+            stem = stem.with_suffix("")
+        saved = self.polytope.save(stem)
+        if self.trace:
+            self.to_frame().to_csv(stem.with_name(stem.name + "_compression_trace.csv"),
+                                   index=False)
+        return saved
 
 
 class Compressor(ABC):

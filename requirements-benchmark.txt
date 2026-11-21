@@ -1,0 +1,31 @@
+# Reproduction dependency snapshot, Python 3.13.9, macOS arm64.
+# Tested environment, not a cross-platform lockfile. No commercial solvers.
+# Install from a fresh virtual environment at the repository root:
+# python -m pip install -r requirements-benchmark.txt
+# python -m pip install --no-deps -e .
+annotated-types==0.6.0
+deepdiff==8.6.1
+geojson==3.2.0
+mypy-extensions==1.0.0
+networkx==3.6.1
+numpy==2.3.5
+orderly-set==5.5.0
+packaging==25.0
+pandapower==3.4.0
+pandas==2.3.3
+pandera==0.26.1
+ply==3.11
+psutil==7.0.0
+pydantic==2.12.4
+pydantic-core==2.41.5
+pyomo==6.9.5
+python-dateutil==2.9.0.post0
+pytz==2025.2
+scipy==1.16.3
+six==1.17.0
+tqdm==4.67.1
+typeguard==4.5.2
+typing-extensions==4.15.0
+typing-inspect==0.9.0
+typing-inspection==0.4.2
+tzdata==2025.2

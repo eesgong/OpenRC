@@ -29,20 +29,23 @@
 % Long module paths in \texttt must be breakable, or they run
 % into the margin.
 \usepackage[htt]{hyphenat}
-\usepackage[colorlinks=true,linkcolor=nbblue,urlcolor=nbblue,citecolor=nbblue]{hyperref}
-\hypersetup{pdftitle={OpenRC: User and Method Guide},pdfauthor={eesgong}}
+\usepackage[colorlinks=true,linkcolor=nbblue,urlcolor=nboxide,citecolor=nbblue]{hyperref}
+\hypersetup{pdftitle={OpenRC: User and Method Guide},pdfauthor={Sicheng Gong}}
 
 %------------------------------------------------------------------ colours ---
-\definecolor{nbblue}{HTML}{2E6DA4}
-\definecolor{nbgrey}{HTML}{555555}
-\definecolor{codebg}{HTML}{F6F8FA}
-\definecolor{coderule}{HTML}{D0D7DE}
-\definecolor{keyword}{HTML}{0550AE}
-\definecolor{strcol}{HTML}{0A7D33}
-\definecolor{comcol}{HTML}{6E7781}
-\definecolor{warnbg}{HTML}{FFF6E5}
-\definecolor{warnrule}{HTML}{D9822B}
-\definecolor{notebg}{HTML}{EDF4FB}
+% Nordic Classical x Postmodern mineral palette (aligned with openrc.scgong.com)
+\definecolor{nbblue}{HTML}{2D435E}
+\definecolor{nboxide}{HTML}{84231B}
+\definecolor{nbverd}{HTML}{215455}
+\definecolor{nbgrey}{HTML}{525760}
+\definecolor{codebg}{HTML}{F6F5F0}
+\definecolor{coderule}{HTML}{DDD9CE}
+\definecolor{keyword}{HTML}{84231B}
+\definecolor{strcol}{HTML}{1F524B}
+\definecolor{comcol}{HTML}{555D67}
+\definecolor{warnbg}{HTML}{FAF4EB}
+\definecolor{warnrule}{HTML}{855816}
+\definecolor{notebg}{HTML}{F2F5F8}
 
 %------------------------------------------------------------------ listings --
 \lstdefinestyle{py}{
@@ -106,8 +109,8 @@
 \renewcommand{\headrulewidth}{0.3pt}
 
 \titleformat{\chapter}[display]
-  {\normalfont\huge\bfseries\color{nbblue}}{\chaptertitlename\ \thechapter}{16pt}{\Huge}
-\titlespacing*{\chapter}{0pt}{-20pt}{26pt}
+  {\normalfont\large\bfseries\color{nboxide}}{\MakeUppercase{\chaptertitlename}\ \thechapter}{8pt}{\Huge\bfseries\color{nbblue}}[\vspace{6pt}{\color{nboxide}\titlerule[1.4pt]}]
+\titlespacing*{\chapter}{0pt}{-20pt}{24pt}
 
 \setlist[itemize]{leftmargin=1.4em,itemsep=0.25em,topsep=0.4em}
 \setlist[enumerate]{leftmargin=1.6em,itemsep=0.25em,topsep=0.4em}
@@ -135,29 +138,43 @@
 \hypersetup{pageanchor=false}
 \begin{titlepage}
 \centering
-\vspace*{2.5cm}
+\vspace*{2.2cm}
+{\color{nboxide}\rule{3.2cm}{2.4pt}\par}
+\vspace{1.0em}
 {\Huge\bfseries\color{nbblue} OpenRC\par}
-\vspace{0.6em}
+\vspace{0.55em}
 {\LARGE Open Region Computation Library\par}
-\vspace{2.2em}
+\vspace{1.8em}
 {\Large User and Method Guide\par}
-\vspace{1.2em}
-{\large Security regions for radial distribution networks\par}
+\vspace{0.9em}
+{\large Security regions for radial and meshed power networks\par}
+\vspace{1.6em}
+{\color{coderule}\rule{0.82\textwidth}{0.6pt}\par}
 \vfill
 \begin{minipage}{0.82\textwidth}
 \small
-OpenRC computes polyhedral approximations of feasible power exchanges at
-selected points of connection. This guide describes the network conventions,
-power-flow models, construction methods, validation procedures and Python API.
+OpenRC turns steady-state power-grid limits into reusable convex polytopes
+$A\,\Delta u \le b$ across selected points of connection (POCs)---constructed,
+compressed and certified offline once, then dispatched online as sub-millisecond
+linear programs. This guide documents the physical sign and indexing contracts,
+power-flow and OPF oracles, adaptive and memory-bounded growth, conservative
+inner intersections, validation and global certification, and the 92-symbol
+Python API.
 
 \medskip
-The source studies and their implementations are listed in
-Chapter~\ref{ch:provenance}. Reproduced numerical results are reported in
+\noindent\textbf{Interactive Lab \& Reference:} \url{https://openrc.scgong.com/}\\
+\textbf{Source Repository:} \url{https://github.com/eesgong/OpenRC}\\
+\textbf{Foundational Paper:} \emph{IEEE Trans.\ Power Syst.}, vol.~39, no.~3,
+pp.~5024--5035, 2024 (\href{https://doi.org/10.1109/TPWRS.2023.3324246}{DOI: 10.1109/TPWRS.2023.3324246}).
+
+\medskip
+Source studies and algorithm provenance are listed in
+Chapter~\ref{ch:provenance}; reproduced benchmarks appear in
 Chapter~\ref{ch:evidence}.
 \end{minipage}
 \vfill
-{\normalsize Version 0.1.0 \quad\textperiodcentered\quad MIT License,
- \copyright\ 2026 eesgong\par}
+{\normalsize Version 0.1.1 \quad\textperiodcentered\quad MIT License
+ \quad\textperiodcentered\quad \copyright\ 2026 Sicheng Gong\par}
 \vspace{1cm}
 \end{titlepage}
 \hypersetup{pageanchor=true}
@@ -175,8 +192,7 @@ Chapter~\ref{ch:evidence}.
 \begin{lstlisting}[style=sh]
 python -m pip install .
 python -c "import OpenRC; print(OpenRC.__version__)"
-# Optional plotting, memory tools and Gurobi bindings:
-python -m pip install '.[viz,resources,gurobi]'
+
 \end{lstlisting}
 
 The runtime requires Python 3.9 or newer; the optional development tools require
@@ -196,13 +212,23 @@ covers the main workflow:
 
 \begin{lstlisting}[style=sh]
 python examples/tutorial.py --list
-python examples/tutorial.py      # quick start, with the equation-candidate example
+python examples/quickstart.py    # recommended solver-free acceptance workflow
+python examples/reproduce_paper.py # archived Model-I regression
 python examples/tutorial.py 14   # run only that example
 \end{lstlisting}
 
 \noindent
-\textbf{Conventions.} Chapter~\ref{ch:conventions} defines units, signs and
-axis labels. These conventions apply to all public interfaces.
+\textbf{Conventions (read first).} Chapter~\ref{ch:conventions} defines units,
+signs and axis labels across every public interface:
+\begin{notebox}
+\small
+\begin{itemize}
+  \item \textbf{Load sign ($+\Delta P, +\Delta Q > 0$):} Net active/reactive power drawn \emph{from} the network (MW, Mvar).
+  \item \textbf{Export sign ($-\Delta P, -\Delta Q < 0$):} Distributed PV, wind or battery injection \emph{into} the network.
+  \item \textbf{0-based Python bus IDs:} All Python and \code{pandapower} bus indices are 0-based. Named paper presets on \code{9bus} map 1-based paper POC numbers automatically: \code{"247"} $\mapsto$ \code{[1, 3, 6]} (\code{('b1p', 'b3p', 'b6p')}), \code{["1p","1q"]} $\mapsto$ bus~1, and \code{"all8"} $\mapsto$ buses \code{0..7} (\code{slack\_bus=8}).
+  \item \textbf{Immutable artifacts:} \code{.save(path)} writes vertex \file{.csv} and SHA-256 provenance \file{.json} sidecars.
+\end{itemize}
+\end{notebox}
 
 \medskip
 \noindent
@@ -222,6 +248,127 @@ assumptions of each certificate scope.
 \textbf{Reference.} Chapter~\ref{ch:recipes} collects common workflows,
 Chapter~\ref{ch:cli} covers the command line, and
 Appendix~\ref{app:api} is the API summary.
+
+
+\section*{Recommended first run and acceptance}
+
+Run \file{examples/quickstart.py} for a complete radial construction,
+compression, 300-scenario LP and 400-point in-region AC audit. The same
+executable source generates the website and README snippets.
+
+% example:quickstart:start
+\begin{lstlisting}
+import numpy as np
+import OpenRC as orc
+
+if __name__ == "__main__":
+    case = orc.get_case("9bus")
+    axes = case.resolve_axes("247")  # paper POCs 2,4,7 -> buses 1,3,6
+    run = orc.get_builder(
+        "conservative", method="tight-intersect", tighten_scope="subtree",
+    ).build(case, axes, max_vertices=24)
+    small = orc.get_compressor("local-search").compress(
+        run.polytope, target_vertices=14,
+    )
+    scenarios = np.random.default_rng(0).uniform(0.8, 1.0, size=(300, len(axes)))
+    batch = orc.get_application("capacity-allocation").solve_batch(
+        small.polytope, scenarios,
+    )
+    # Draw inside the region to audit violations; this does not measure lost volume.
+    audit = orc.evaluate_region(
+        small.polytope, case, axes, reference="acpf", adjudicate=False,
+        sampler="in-region", n_samples=400, rng=0,
+    )
+    print(run.summary(), small.summary(), batch.summary(), audit.summary(), sep="\n")
+\end{lstlisting}
+% example:quickstart:end
+
+\noindent\textbf{Interpretation.} The recommended configuration explicitly uses
+Method 2 with subtree tightening. The \code{theorem\_backed} flag concerns
+the supported radial branch-flow model, its assumptions and tolerances;
+it is distinct from a global numerical certificate. The full script checks
+positive volume, compression containment, 300 solved LPs and 400 decided
+in-region samples with no observed violations. On the benchmark environment,
+the geometry has 46 vertices before compression and 14 afterwards, source
+volume approximately 257.991\,MW$^3$, and 5.711\,\% compression loss.
+Timings vary with hardware and warm-up and are not acceptance thresholds.
+
+A zero-violation audit over 400 decided in-region samples has a 95\,\%
+Wilson interval of 0--0.951\,\%. In-region sampling does not measure lost
+feasible volume. Use a common box sampler for coverage comparisons; always
+report the decided in-region denominator and unresolved counts. A zero
+point estimate is not a global AC certificate. \code{run.summary()} prints
+the construction guarantee; \code{audit.summary()} prints the sample evidence.
+
+\noindent\textbf{Other complete examples.}
+\file{examples/my\_network.py} imports a radial pandapower feeder, explicitly
+sets its loading and bus IDs, prints the guarantee and 200-point in-region
+audit, then saves CSV and JSON provenance. Its zero-violation Wilson interval
+is 0--1.885\,\%. \file{examples/reproduce\_paper.py} checks the archived
+Model-I volume within 50 ppm; this regression is not an AC certificate.
+
+\noindent\textbf{Reproducible source and environment.}
+Retain a Git commit or the documentation archive's SHA-256 manifest with each
+experiment. \file{requirements-benchmark.txt} pins the resolved core
+packages checked on Python 3.13.9 / macOS arm64; its NumPy and SciPy require
+Python 3.11 or newer. It is not a universal cross-platform lockfile. From a
+fresh Python 3.13 environment in the source root:
+\begin{lstlisting}[style=sh]
+python -m pip install -r requirements-benchmark.txt
+python -m pip install --no-deps -e .
+python examples/reproduce_paper.py
+python -m pip freeze > installed-environment.txt
+\end{lstlisting}
+Install optional plotting or licensed solvers separately, only when needed.
+The legacy constructor defaults remain unchanged to preserve historical
+experiments; choose the recommended subtree configuration explicitly.
+
+\section*{Three guarantee tiers and stack selection}
+
+OpenRC distinguishes analytical radial theorems, finite-sample statistical
+audits, and global nonlinear surface certificates:
+
+\begin{center}\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{3.5cm}>{\raggedright\arraybackslash}p{5.5cm}>{\raggedright\arraybackslash}p{5.2cm}@{}}
+\toprule
+\textbf{Guarantee tier} & \textbf{What is proven} & \textbf{Boundary / exclusion} \\
+\midrule
+1.\ Analytical inner (\code{theorem\_backed: True}) &
+  Exact radial branch-flow inner intersection (\code{tight-voltage} $\cap$ \code{tight-flow}, 0 LP) via \code{tighten\_scope="subtree"} &
+  Radial trees only; align slack voltage (\code{"setpoint"}) \& shunts (\code{"constant"}) when auditing against AC \\
+2.\ Statistical audit (\code{evaluate\_region}) &
+  95\,\% Wilson confidence interval (\code{error\_rate\_ci}) over \code{n\_samples} nonlinear \code{acpf}/\code{acopf} checks &
+  Finite random draws cannot rule out narrow unexplored overload corners \\
+3.\ Global surface proof (\code{certify\_inner\_region}) &
+  Worst-case facet bounds via Gurobi spatial B\&B + Brouwer--Miranda existence &
+  Requires licensed \code{.[gurobi]}; check \code{certified}, \code{status} and \code{scope == "inner"} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{3.6cm}>{\raggedright\arraybackslash}p{5.8cm}>{\raggedright\arraybackslash}p{4.8cm}@{}}
+\toprule
+\textbf{Operating regime} & \textbf{Recommended builder \& arguments} & \textbf{Validation / compression} \\
+\midrule
+Radial conservative inner (solver-free default) &
+  \code{get\_builder("conservative", method="tight-intersect", tighten\_scope="subtree")} &
+  \code{local-search} + \code{evaluate\_region(..., reference="acpf")} \\
+Full-feeder path erosion (e.g.\ \code{"all8"}) &
+  \code{get\_builder("conservative", method="intersect-shift", shift\_scope="path")} &
+  Never use paper-only \code{shift\_scope="feeding\_branch"} for safety \\
+Globally certified AC inner &
+  \code{ConservativeBuilder} or \code{shrink\_to\_certified(...)} &
+  \code{certify\_inner\_region(..., backend="gurobi")} \\
+High-D ($d = 5\text{--}16$) &
+  \code{get\_builder("memory-aware", budget\_mb=64.0, compressor="star-screened")} &
+  Caps \code{LiveHull} facet memory in MiB \\
+Meshed / multi-slack OPF &
+  \code{get\_builder("expansive", policy="adaptive-ema")} with \code{acopf} or \code{acpf} &
+  \code{evaluate\_region(..., reference="acopf")} \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 %==============================================================================
 \chapter{Security-region computation}
@@ -296,6 +443,28 @@ inequalities keeps them exactly, Section~\ref{sec:setops}):
 Facet count can dominate geometry cost: one measured 8-D region with
 60 vertices had over 28\,000 facets. Chapters~\ref{ch:execution}
 and~\ref{ch:compression} describe memory control and compression.
+
+\section{Comparison with related approaches}
+
+Table~\ref{tab:peers} contrasts OpenRC's offline polyhedral region workflow with
+four standard steady-state hosting-capacity and operating-envelope paradigms.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Comparison of steady-state hosting-capacity and security-region methods.}
+\label{tab:peers}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}p{2.7cm}>{\raggedright\arraybackslash}p{3.2cm}>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{3.1cm}@{}}
+\toprule
+\textbf{Approach} & \textbf{Output} & \textbf{AC safety} & \textbf{Online LP?} & \textbf{Primary fit} \\
+\midrule
+Batch PF / Monte Carlo & Discrete point cloud & Checked at sampled points only & No & Historical time-series replay \\
+Repeated NLP / SOCP OPF & Single dispatch vector & Pointwise exact / conic outer & No & Centralised real-time DSO OPF \\
+Axis-aligned box DOEs & Fixed box $\prod [P_j^-, P_j^+]$ & Inner on monotone radial & Fixed split only & Uncoordinated meter export caps \\
+Linear PTDF / mpLP & Halfspaces $Au \le b$ & Optimistic (ignores $I^2R$) & Yes (uncertified) & Lossless HV DC corridors ($d \le 5$) \\
+\textbf{OpenRC (\code{v0.1.1})} & \textbf{Vertices + $A\Delta u \le b$} & \textbf{3-tier: DistFlow / Wilson CI / Global B\&B} & \textbf{Yes ($\sim$0.38\,ms)} & \textbf{Coupled multi-POC flexibility \& EMS} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 %==============================================================================
 \chapter{Software architecture}
@@ -398,6 +567,8 @@ processes (Section~\ref{sec:workers}).}
 
 \begin{lstlisting}[style=sh,basicstyle=\ttfamily\scriptsize]
 OpenRC/
+  .github/workflows/
+    quality.yml              solver-free CI (tests, examples, ruff, mypy)
   OpenRC/                    the package
     registry.py              the Registry class
     utils.py                 logging, timing
@@ -413,8 +584,8 @@ OpenRC/
                              equations.py: SciPy/custom candidate interface;
                              sweep.py: certified radial fixed-point sweeps;
                              interval.py: outward-rounded interval arithmetic
-    geometry/                polytopes, ray search, set operations,
-                             live_hull.py: the hull kept alive while growing
+    geometry/                polytopes (projection + slice), ray search,
+                             set operations, live_hull.py: incremental hull
     region/                  builders, seeds, facet policies and screens,
                              refine.py: vertex relocation at a fixed size,
                              ray_growth.py: pluggable ray strategies
@@ -423,7 +594,7 @@ OpenRC/
                              inner-region certificate, existence proof,
                              verification modes
     applications/            decision problems
-    viz.py                   plots (optional; imports matplotlib lazily)
+    viz.py                   2-D/3-D plots (imports matplotlib lazily)
   scripts/
     demo.py                  command-line driver
     benchmark.py             methods x networks x dimensions x seeds
@@ -432,8 +603,16 @@ OpenRC/
     generate_readme_figures.py
                              regenerates the README figures
   examples/
-    tutorial.py              the runnable tutorial
+    quickstart.py            solver-free first run
+    my_network.py            radial pandapower import + inner build
+    reproduce_paper.py       archived reference volume comparison
+    tutorial.py              the runnable 14-step tutorial
+  tests/                     solver-free regression, geometry, physics, CLI tests
   docs/                      this document; the README figures
+  CITATION.cff               software citation metadata
+  pyproject.toml             package metadata, dependencies, static checks
+  requirements.txt           core dependency list
+  requirements-benchmark.txt pinned benchmark profile
 \end{lstlisting}
 
 %==============================================================================
@@ -1567,7 +1746,8 @@ region.hrep                   # the exact (A, b) it was built from, or None
 region.contains(points)       # bool, or a bool array
 region.bounding_box(margin)
 region.translate(offset)      # rigid shift
-region.subspace([0, 2])       # projection, for plotting a slice of 8-D
+region.subspace(["1p", "6p"]) # coordinate projection (indices or axis specs)
+region.slice({"3p": 0.0})     # exact cross-section at fixed coordinate(s)
 region.reduce_to_hull()       # drop interior points
 region.save(path)             # CSV vertices + JSON provenance sidecar
 \end{lstlisting}
@@ -4170,6 +4350,9 @@ orc.list_pandapower_networks()                 # the built-in library
 orc.classify_pandapower_networks(names=None)   # which oracles apply (builds them)
 orc.list_feeders(net)                          # independently fed parts
 orc.Polytope, orc.Verdict, orc.configure_logging
+# Key geometry & plotting helpers:
+#   poly.slice(axes=(0, 1), fixed={...}), poly.subspace(...), comp.save(path)
+#   from OpenRC.viz import plot_region_2d, plot_region_3d
 \end{lstlisting}
 
 \section{Registered names}
@@ -4230,6 +4413,8 @@ Applications & \code{capacity-allocation}, \code{storage-sizing} \\
 \code{NotOpfReadyError} & Required OPF cost or limit data are missing. \\
 \code{UnratedBranchError} & The chosen model bounds losses by thermal ratings
   that some lines do not have. Pass \code{default\_rating\_ka}. \\
+\code{SolverUnavailableError} & An oracle or global-bound stage requested MOSEK
+  or Gurobi when that solver binding is not installed. \\
 \code{MemoryBudgetExceeded} & A configured RSS or modelled hull-memory budget
   has been exceeded. \\
 \bottomrule

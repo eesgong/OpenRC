@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If OpenRC is helpful to your research or engineering work, we would appreciate a citation to our IEEE Transactions on Power Systems paper below."
+type: software
+title: "OpenRC: Open Region Computation Library"
+version: 0.1.1
+license: MIT
+repository-code: "https://github.com/eesgong/OpenRC"
+url: "https://openrc.scgong.com/"
+authors:
+  - family-names: Gong
+    given-names: Sicheng
+preferred-citation:
+  type: article
+  title: "Multidimensional Hosting Capacity Region in Dutch MV Grid Congestion Management"
+  authors:
+    - family-names: Gong
+      given-names: Sicheng
+    - family-names: "Ćuk"
+      given-names: Vladimir
+    - family-names: Cobben
+      given-names: "J. F. G."
+  journal: "IEEE Transactions on Power Systems"
+  volume: 39
+  issue: 3
+  start: 5024
+  end: 5035
+  year: 2024
+  doi: "10.1109/TPWRS.2023.3324246"

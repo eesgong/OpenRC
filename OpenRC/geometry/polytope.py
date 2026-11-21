@@ -21,16 +21,17 @@ import json
 import hashlib
 import math
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
-from numbers import Integral
+from numbers import Integral, Real
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, Dict, Optional, Sequence
+from typing import TYPE_CHECKING, Any, BinaryIO, Dict, Optional, Sequence, Union
 
 import numpy as np
 
 if TYPE_CHECKING:
-    from OpenRC.cases.axes import RegionAxes
+    from OpenRC.cases.axes import AxisSpec, RegionAxes
 
 
 #: Qhull option sets tried in order by :attr:`Polytope.hull`.  ``None`` is
@@ -51,6 +52,52 @@ _HALFSPACE_OPTIONS = (None, "Qx", "Qt", "Qx Q12", "Q14")
 
 _GEOMETRY_CACHES = ("hull", "volume", "halfspaces", "facets", "n_facets",
                     "centroid", "hull_vertices")
+
+_REGION_CLAIM_KEYS = (
+    "builder",
+    "oracle_stats",
+    "seconds",
+    "stopped_because",
+    "conservative_method",
+    "shift_scope",
+    "tighten_scope",
+    "guarantee",
+    "theorem_backed",
+    "certified",
+    "certified_contraction",
+    "certificate",
+)
+
+
+def _strip_region_claims(metadata: Mapping[str, Any]) -> Dict[str, Any]:
+    """Copy metadata without builder/certification claims invalidated by transforms."""
+    return {k: v for k, v in metadata.items() if k not in _REGION_CLAIM_KEYS}
+
+
+def _resolve_dim_selector(selector: Union[int, "AxisSpec"], dim: int,
+                          axes: Optional["RegionAxes"]) -> int:
+    """Resolve a 0-based coordinate index or an axis selector to ``0 .. dim - 1``."""
+    if isinstance(selector, (bool, np.bool_)):
+        raise ValueError(f"coordinate selector cannot be boolean, got {selector!r}")
+    if isinstance(selector, Integral):
+        idx = int(selector)
+        if not 0 <= idx < dim:
+            raise ValueError(f"coordinate index {idx} out of range 0..{dim - 1}")
+        return idx
+    if axes is None:
+        raise ValueError(
+            f"axis selector {selector!r} requires polytope.axes to be set; "
+            f"use integer indices in 0..{dim - 1}"
+        )
+    from OpenRC.cases.axes import RegionAxis
+
+    target = RegionAxis.parse(selector)
+    idx = axes.index_of(target.bus, target.quantity)
+    if idx < 0:
+        raise ValueError(
+            f"axis {target.label!r} is not among polytope axes {axes.labels}"
+        )
+    return idx
 
 
 def mc_volume(A: np.ndarray, b: np.ndarray, lower: np.ndarray, upper: np.ndarray, *,
@@ -765,9 +812,10 @@ class Polytope:
                 stop = min(start + rows, len(pts))
                 inside[start:stop] = np.all(pts[start:stop] @ A.T <= b[None, :], axis=1)
         else:
-            c = self.vertices.mean(axis=0)
+            ref = self.hull_vertices if "hull" in self.__dict__ else self.vertices
+            c = 0.5 * (ref.min(axis=0) + ref.max(axis=0))
             b_rel = b - A @ c
-            radius = float(np.linalg.norm(self.vertices - c, axis=1).max())
+            radius = float(np.linalg.norm(ref - c, axis=1).max())
             eps_floor = 8.0 * np.finfo(float).eps * (np.abs(b) + float(np.linalg.norm(c)))
             threshold_rel = b_rel + tol * np.maximum(np.abs(b_rel), radius) + eps_floor
             for start in range(0, len(pts), rows):
@@ -839,33 +887,88 @@ class Polytope:
         offset = np.asarray(raw_offset, dtype=float)
         if offset.shape != (self.dim,) or not np.all(np.isfinite(offset)):
             raise ValueError(f"offset must be a finite vector with shape ({self.dim},)")
-        out = self.replace(vertices=self.vertices + offset[None, :])
+        moved = bool(np.any(offset != 0.0))
+        meta = (_strip_region_claims(self.metadata) | {"op": "translate", "offset": offset.tolist()}
+                if moved else dict(self.metadata))
+        out = Polytope(vertices=self.vertices + offset[None, :], axes=self.axes, metadata=meta)
         if self.hrep is not None:
             A, b = self.hrep
             out.hrep = (A, b + A @ offset)
         return out
 
-    def subspace(self, dims: Sequence[int]) -> "Polytope":
-        """Orthogonal projection onto coordinate indices ``dims``.
+    def subspace(self, dims: Sequence[Union[int, "AxisSpec"]]) -> "Polytope":
+        """Orthogonal projection onto coordinate indices or axis selectors ``dims``.
 
         Projects ``vertices[:, dims]`` (marginal feasible set, as opposed to a
-        cross-section at fixed values of the omitted coordinates).
+        cross-section at fixed values of the omitted coordinates; see
+        :meth:`slice` for an exact cross-section).
         """
         if isinstance(dims, (str, bytes, bytearray)):
-            raise TypeError("dims must be a sequence of coordinate indices, not a string")
-        dims = list(dims)
-        # Reject booleans, negative indices, out-of-range indices, and duplicates.
-        if (not dims or any(isinstance(d, (bool, np.bool_)) or not isinstance(d, Integral)
-                            for d in dims)
-                or len(set(dims)) != len(dims) or min(dims) < 0 or max(dims) >= self.dim):
-            raise ValueError(
-                f"dims must be distinct coordinate indices in 0..{self.dim - 1}, got {dims}")
+            raise TypeError("dims must be a sequence of coordinate selectors, not a string")
+        raw_dims = list(dims)
+        if not raw_dims:
+            raise ValueError("dims must contain at least one coordinate selector")
+        resolved = [_resolve_dim_selector(d, self.dim, self.axes) for d in raw_dims]
+        if len(set(resolved)) != len(resolved):
+            raise ValueError(f"dims must resolve to distinct coordinates, got {raw_dims}")
         axes = None
         if self.axes is not None:
             from OpenRC.cases.axes import RegionAxes
 
-            axes = RegionAxes([self.axes[d] for d in dims])
-        return Polytope(self.vertices[:, dims], axes=axes, metadata=dict(self.metadata))
+            axes = RegionAxes([self.axes[d] for d in resolved])
+        meta = _strip_region_claims(self.metadata) | {"op": "subspace", "dims": resolved}
+        return Polytope(self.vertices[:, resolved], axes=axes, metadata=meta)
+
+    def slice(self, fixed: Mapping[Union[int, "AxisSpec"], float]) -> "Polytope":
+        """Cross-section ``{x_free : (x_free, x_fixed) in P}`` at fixed coordinates.
+
+        Unlike :meth:`subspace` (which projects vertices marginally over all
+        values of the omitted axes), ``slice`` intersects ``P``'s half-space
+        inequalities with the hyperplane ``x[k] = value`` for each entry of
+        ``fixed`` (accepting either 0-based integer indices or axis selectors
+        such as ``"6p"`` / ``"b6p"`` when :attr:`axes` is set).
+        """
+        from OpenRC.geometry.ops import EmptyIntersectionError, from_halfspaces
+
+        if not isinstance(fixed, Mapping) or not fixed:
+            raise ValueError("fixed must be a non-empty mapping of axis selector -> value")
+        pinned: Dict[int, float] = {}
+        for selector, raw_val in fixed.items():
+            idx = _resolve_dim_selector(selector, self.dim, self.axes)
+            if idx in pinned:
+                raise ValueError(f"duplicate fixed coordinate index {idx} in {list(fixed)}")
+            if (isinstance(raw_val, (bool, np.bool_))
+                    or not isinstance(raw_val, (int, float, Real))
+                    or not math.isfinite(float(raw_val))):
+                raise ValueError(f"fixed value for coordinate {selector!r} must be a finite number")
+            pinned[idx] = float(raw_val)
+        free_idx = [k for k in range(self.dim) if k not in pinned]
+        if not free_idx:
+            raise ValueError("slice must leave at least one free coordinate")
+        fixed_idx = sorted(pinned)
+        fixed_vals = np.array([pinned[k] for k in fixed_idx], dtype=float)
+
+        A, b = self.facets
+        rhs = b - A[:, fixed_idx] @ fixed_vals
+        A_free = A[:, free_idx]
+        norms = np.linalg.norm(A_free, axis=1)
+        vertical = norms <= 1e-12
+        if np.any(rhs[vertical] < -1e-12):
+            raise EmptyIntersectionError("the slice plane does not intersect the polytope")
+        keep = ~vertical
+        if not np.any(keep):
+            raise EmptyIntersectionError("the slice leaves no bounding facets in free coordinates")
+
+        axes = None
+        if self.axes is not None:
+            from OpenRC.cases.axes import RegionAxes
+
+            axes = RegionAxes([self.axes[d] for d in free_idx])
+        out = from_halfspaces(A_free[keep], rhs[keep], axes=axes, what="polytope slice")
+        fixed_meta = ({self.axes[k].label: pinned[k] for k in fixed_idx}
+                      if self.axes is not None else {str(k): pinned[k] for k in fixed_idx})
+        out.metadata = _strip_region_claims(self.metadata) | {"op": "slice", "fixed": fixed_meta}
+        return out
 
     # --------------------------------------------------------------- storage
     def save(self, path: Path) -> Path:
@@ -958,10 +1061,13 @@ class Polytope:
             checksum_ok = storage is None or _stream_sha256(stream) == storage["csv_sha256"]
         vertices = frame.to_numpy(dtype=float)
 
+        from OpenRC.cases.axes import RegionAxes
+
+        if axes is not None and not isinstance(axes, RegionAxes):
+            axes = RegionAxes(axes)
+
         stored_axes = metadata.get("axes")
         if isinstance(stored_axes, list) and stored_axes:
-            from OpenRC.cases.axes import RegionAxes
-
             saved_axes = RegionAxes(stored_axes)
             if list(frame.columns) != saved_axes.labels:
                 raise ValueError(f"CSV column labels/order {list(frame.columns)} do not match "
@@ -970,6 +1076,21 @@ class Polytope:
                 raise ValueError(f"explicit axes {axes.labels} do not match the stored axes "
                                  f"{saved_axes.labels} of {csv_path.name}")
             axes = saved_axes if axes is None else axes
+        elif len(frame.columns) > 0 and all(
+            isinstance(c, str) and c.strip().lower().endswith(("p", "q"))
+            for c in frame.columns
+        ):
+            try:
+                header_axes = RegionAxes(list(frame.columns))
+            except ValueError:
+                header_axes = None
+            if header_axes is not None:
+                if axes is not None and axes.labels != header_axes.labels:
+                    raise ValueError(
+                        f"explicit axes {axes.labels} do not match the CSV header axes "
+                        f"{header_axes.labels} of {csv_path.name}"
+                    )
+                axes = header_axes if axes is None else axes
         if not checksum_ok:
             raise ValueError(f"CSV checksum does not match the saved snapshot of {csv_path.name}; "
                              "keep the CSV and JSON from the same completed save")
@@ -995,4 +1116,6 @@ class Polytope:
         )
 
     def __repr__(self) -> str:
-        return f"<Polytope dim={self.dim} n_vertices={self.n_vertices} volume={self.volume:.4g}>"
+        if "volume" in self.__dict__ or "hull" in self.__dict__ or self.dim <= 4:
+            return f"<Polytope dim={self.dim} n_vertices={self.n_vertices} volume={self.volume:.4g}>"
+        return f"<Polytope dim={self.dim} n_vertices={self.n_vertices}>"

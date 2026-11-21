@@ -152,6 +152,7 @@ def main(argv=None) -> list:
     if args.out:
         import pandas as pd
 
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         pd.DataFrame(rows).to_csv(args.out, index=False)
     return rows
 

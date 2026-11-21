@@ -352,6 +352,9 @@ class OracleSpec:
         """Construct a spec from live objects, validating that it is reproducible."""
         if not isinstance(oracle_name, str) or not oracle_name.strip():
             raise ValueError("oracle_name must be a non-empty string")
+        from OpenRC.powerflow.base import _ORACLE_ALIASES
+
+        oracle_name = _ORACLE_ALIASES.get(oracle_name, oracle_name)
         if oracle_kwargs is not None and not isinstance(oracle_kwargs, dict):
             raise TypeError("oracle_kwargs must be a dict")
         case_name = getattr(case, "name", None)
@@ -770,6 +773,16 @@ class FeasibilityPool:
         return out
 
 
+def _init_process_worker(spec: Optional[OracleSpec]) -> None:
+    """Pre-build the worker's case and oracle on process start-up without solving."""
+    if spec is not None:
+        _worker_context(spec)
+
+
+def _worker_noop(_index: int) -> int:
+    return _index
+
+
 def _make_pool(n_workers: int, backend: str, *, spec: Optional[OracleSpec] = None):
     """Build the executor, using "spawn" so solver libraries start clean.
 
@@ -777,8 +790,8 @@ def _make_pool(n_workers: int, backend: str, *, spec: Optional[OracleSpec] = Non
     licence handle it has already checked out, which is a well-known source of
     hangs.  "spawn" starts each worker from a fresh interpreter instead.
 
-    On the first call for a given ``(case, oracle, n_workers)`` key, runs one
-    warm-up task per worker and records the elapsed start-up time in
+    On the first call for a given ``(case, oracle, n_workers)`` key, initializes
+    worker contexts and records the elapsed start-up time in
     :data:`_MEASURED_STARTUP`.
     """
     import time as _time
@@ -789,15 +802,16 @@ def _make_pool(n_workers: int, backend: str, *, spec: Optional[OracleSpec] = Non
     import multiprocessing as mp
 
     start = _time.perf_counter()
-    pool = ProcessPoolExecutor(max_workers=n_workers,
-                               mp_context=mp.get_context("spawn"))
+    pool = ProcessPoolExecutor(
+        max_workers=n_workers,
+        mp_context=mp.get_context("spawn"),
+        initializer=_init_process_worker,
+        initargs=(spec,),
+    )
     key = None if spec is None else (spec.case, spec.oracle, int(n_workers))
     if spec is not None and key is not None and key not in _MEASURED_STARTUP:
-        # Run one probe task per worker so the timing includes interpreter spawn
-        # and case/oracle construction.
-        probe = [(spec, np.zeros((1, len(spec.axes))))] * n_workers
         try:
-            list(pool.map(_worker_batch, probe))
+            list(pool.map(_worker_noop, range(n_workers)))
             _MEASURED_STARTUP[key] = _time.perf_counter() - start
             LOGGER.info("pool start-up for %s on %r with %d workers measured at %.1f s",
                         key[1], key[0], key[2], _MEASURED_STARTUP[key])
@@ -820,11 +834,13 @@ def evaluate_points(case, axes, oracle_name: str, points: np.ndarray, *,
     sequentially in the current process with a warning.
     """
     from OpenRC.powerflow import get_oracle
+    from OpenRC.powerflow.base import _ORACLE_ALIASES
 
     if axes is None or isinstance(axes, (str, bytes, bytearray)):
         raise TypeError("axes must be a RegionAxes or sequence of axes, not None or str")
     if not isinstance(oracle_name, str) or not oracle_name.strip():
         raise ValueError("oracle_name must be a non-empty string")
+    oracle_name = _ORACLE_ALIASES.get(oracle_name, oracle_name)
     if oracle_kwargs is not None and not isinstance(oracle_kwargs, dict):
         raise TypeError("oracle_kwargs must be a dict")
     if (isinstance(calibration, (bool, np.bool_))
@@ -859,28 +875,30 @@ def evaluate_points(case, axes, oracle_name: str, points: np.ndarray, *,
 
             # Evaluate head[0] untimed so one-time Pyomo model construction and
             # solver initialization do not bias the per-query runtime estimate.
-            head_verdicts = [oracle.feasible_at(axes, head[0])]
+            first = bool(oracle.feasible_at(axes, head[0]))
             timed = head[1:]
             if len(timed):
                 start = _time.perf_counter()
-                head_verdicts += [oracle.feasible_at(axes, p) for p in timed]
+                timed_mask = oracle.feasible_mask(axes, timed)
                 per_item = (_time.perf_counter() - start) / len(timed)
+                head_arr = np.concatenate([np.array([first], dtype=bool), timed_mask])
             else:
                 per_item = 0.0
+                head_arr = np.array([first], dtype=bool)
 
             rest = pts[len(head):]
             if len(rest) == 0:
-                return np.asarray(head_verdicts, dtype=bool)
+                return head_arr
             workers = plan_workers(len(rest), per_item, "auto",
                                    key=(getattr(case, "name", ""), oracle_name))
             spec = _spec_or_none(case, axes, oracle_name, oracle_kwargs) if workers > 1 else None
             if spec is None:
                 tail_values = oracle.feasible_mask(axes, rest)
-                return np.concatenate([np.asarray(head_verdicts, dtype=bool), tail_values])
+                return np.concatenate([head_arr, tail_values])
         with FeasibilityPool(spec, n_workers=workers, backend=backend,
                              chunk_size=chunk_size) as pool:
             tail_array = pool.feasible(rest)
-        return np.concatenate([np.array(head_verdicts, dtype=bool), tail_array])
+        return np.concatenate([head_arr, tail_array])
 
     workers = resolved_workers if resolved_workers is not None else resolve_workers(n_workers)
     spec = _spec_or_none(case, axes, oracle_name, oracle_kwargs) if workers > 1 else None

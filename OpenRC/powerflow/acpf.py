@@ -185,28 +185,13 @@ class _PandapowerOracle(FeasibilityOracle):
             values = {column: live[column] for column in ("p_mw", "q_mvar")
                       if column in live.columns}
             if table == "sgen" and isinstance(self, AcPowerFlowOracle):
-                import inspect
+                from OpenRC.cases.pandapower_adapter import _effective_sgen_pq
 
-                # The sgen clipping implementation arrived with enforce_p_lims.
-                # Older supported pandapower versions apply neither sgen clip.
-                clips_sgen = "enforce_p_lims" in inspect.signature(pp.runpp).parameters
-                options = net.get("user_pf_options", {}) if clips_sgen else {}
-                if options.get("enforce_p_lims", False):
-                    values["p_mw"] = live.p_mw.clip(
-                        lower=live.get("min_p_mw"), upper=live.get("max_p_mw"))
-                if options.get("enforce_q_lims", False):
-                    lower = live.get("min_q_mvar", live.q_mvar * 0.0 + np.nan).copy()
-                    upper = live.get("max_q_mvar", live.q_mvar * 0.0 + np.nan).copy()
-                    if "q_capability_characteristic" in net:
-                        from pandapower.build_gen import (
-                            _calculate_qmin_qmax_from_q_capability_characteristics,
-                        )
-
-                        curves = _calculate_qmin_qmax_from_q_capability_characteristics(net, "sgen")
-                        if curves is not None and not curves.empty:
-                            lower.update(curves.min_q_mvar)
-                            upper.update(curves.max_q_mvar)
-                    values["q_mvar"] = live.q_mvar.clip(lower=lower, upper=upper)
+                eff_p, eff_q = _effective_sgen_pq(net, live)
+                if eff_p is not None:
+                    values["p_mw"] = eff_p
+                if eff_q is not None:
+                    values["q_mvar"] = eff_q
             for column, aggregate in (("p_mw", base_p), ("q_mvar", base_q)):
                 if column in values:
                     np.add.at(aggregate, buses, sign * values[column].to_numpy(dtype=float) * scaling)

@@ -23,11 +23,16 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import threading
 
 import numpy as np
 
 from OpenRC.powerflow.acpf import _PandapowerOracle
 from OpenRC.powerflow.base import ORACLES, Verdict
+
+_LOG_LOCK = threading.Lock()
+_QUIET_ACTIVE = 0
+_SAVED_LOG_LEVEL = logging.NOTSET
 
 
 class NotOpfReadyError(ValueError):
@@ -56,16 +61,23 @@ class _OpfOracle(_PandapowerOracle):
     @contextlib.contextmanager
     def _solver_logging(self):
         """Temporarily raise pandapower's log level while a solve runs."""
+        global _QUIET_ACTIVE, _SAVED_LOG_LEVEL
         if not self.quiet:
             yield
             return
         logger = logging.getLogger("pandapower")
-        previous = logger.level
-        logger.setLevel(logging.ERROR)
+        with _LOG_LOCK:
+            if _QUIET_ACTIVE == 0:
+                _SAVED_LOG_LEVEL = logger.level
+                logger.setLevel(logging.ERROR)
+            _QUIET_ACTIVE += 1
         try:
             yield
         finally:
-            logger.setLevel(previous)
+            with _LOG_LOCK:
+                _QUIET_ACTIVE -= 1
+                if _QUIET_ACTIVE == 0:
+                    logger.setLevel(_SAVED_LOG_LEVEL)
 
     def _prepare_net(self):
         net = super()._prepare_net()
@@ -82,9 +94,12 @@ class _OpfOracle(_PandapowerOracle):
             frame = getattr(net, table, None)
             if frame is not None and len(frame):
                 frame["max_loading_percent"] = self._branch_loading_limits(frame)
-        # Fix controllable=False on loads so the OPF cannot curtail POC injections.
+        # Keep OpenRC's attached control loads fixed so OPF cannot curtail POC queries,
+        # while preserving any user-configured dispatchable loads on the network.
         if "controllable" in net.load.columns:
-            net.load["controllable"] = False
+            if len(self._control_rows):
+                net.load.loc[self._control_rows, "controllable"] = False
+            net.load["controllable"] = net.load["controllable"].fillna(False)
         return net
 
     @staticmethod
@@ -123,8 +138,13 @@ class _OpfOracle(_PandapowerOracle):
                         "oracles."
                     )
 
-    def _run(self, net) -> None:  # subclasses implement this
-        raise NotImplementedError
+    def reset_warm_state(self) -> None:
+        """Clear stored OPF results so ``init='results'`` starts fresh."""
+        with self._lock:
+            if self._net is not None:
+                import pandapower as pp
+
+                pp.reset_results(self._net)
 
     def _check(self, p_mw: np.ndarray, q_mvar: np.ndarray) -> bool:
         return self._verdict(p_mw, q_mvar) is Verdict.FEASIBLE

@@ -1,12 +1,14 @@
 """Region builders: the interface, the result object, and the seeding strategies.
 
 A *builder* turns ``(case, axes, oracle)`` into a :class:`Polytope` plus a
-record of how it got there.  Three are registered:
+record of how it got there.  Four are registered:
 
 ``expansive``     grow a polytope by repeatedly breaking a facet (the method of
                   the hosting-capacity-region and facet-selection papers)
-``memory-aware``  the same, interleaved with compression so the vertex set never
-                  outgrows a memory budget
+``ray-growth``    grow or polish a polytope by firing boundary rays along
+                  pluggable facet or volume-gradient proposals
+``memory-aware``  interleave expansion and compression so the vertex set never
+                  outgrows a memory or vertex budget
 ``conservative``  build an inner approximation of the exact feasible set, by
                   either of the two published routes
 
@@ -27,7 +29,7 @@ import contextlib
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, overload
 
 import numpy as np
 
@@ -37,6 +39,10 @@ from OpenRC.registry import Registry
 
 if TYPE_CHECKING:
     from OpenRC.geometry.live_hull import LiveHull
+    from OpenRC.region.conservative import ConservativeBuilder
+    from OpenRC.region.expansive import ExpansiveBuilder
+    from OpenRC.region.memory_aware import MemoryAwareBuilder
+    from OpenRC.region.ray_growth import RayGrowthBuilder
 
 #: Registry of region-builder classes.
 BUILDERS: Registry = Registry("region builder")
@@ -88,6 +94,20 @@ def check_hull_budget(live: "LiveHull", max_hull_mb: Optional[float]) -> None:
             "the supplied hull, or raise the cap")
 
 
+def single_oracle_guarantee(oracle) -> str:
+    """Qualification string for a hull grown against a single oracle."""
+    name = getattr(oracle, "name", "oracle")
+    if getattr(oracle, "inner_approximation", None) is False:
+        return (
+            f"outer-relaxation hull of {name!r}; feasible points may fail "
+            "exact branch-flow or AC limits"
+        )
+    return (
+        f"candidate hull of {name!r} boundary probes; not a certified exact "
+        "branch-flow or AC inner region"
+    )
+
+
 # --------------------------------------------------------------------------
 # Result
 # --------------------------------------------------------------------------
@@ -109,6 +129,40 @@ class RegionResult:
     def __post_init__(self) -> None:
         if not isinstance(self.polytope, Polytope):
             raise TypeError(f"polytope must be a Polytope, got {type(self.polytope).__name__}")
+        self._sync_polytope_metadata()
+
+    def _sync_polytope_metadata(self) -> None:
+        self.polytope.metadata.update(
+            builder=self.builder_info,
+            oracle_stats=self.oracle_stats,
+            seconds=self.seconds,
+            stopped_because=self.stopped_because,
+        )
+
+    def __repr__(self) -> str:
+        name = self.builder_info.get("builder", "region")
+        calls = self.oracle_stats.get("n_calls", "?")
+        vol = (f", volume={self.volume:.6g}"
+               if ("volume" in self.polytope.__dict__
+                   or "hull" in self.polytope.__dict__
+                   or self.polytope.dim <= 4)
+               else "")
+        return (
+            f"RegionResult(builder={name!r}, dim={self.polytope.dim}, "
+            f"n_vertices={self.n_vertices}{vol}, "
+            f"calls={calls}, seconds={self.seconds:.2f})"
+        )
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "builder_info": dict(self.builder_info),
+            "oracle_stats": dict(self.oracle_stats),
+            "n_vertices": self.n_vertices,
+            "dim": self.polytope.dim,
+            "volume": self.volume,
+            "seconds": self.seconds,
+            "stopped_because": self.stopped_because,
+        }
 
     def release_hull(self) -> None:
         """Free the working hull, keeping only the vertex set."""
@@ -132,12 +186,25 @@ class RegionResult:
 
     def summary(self) -> str:
         calls = self.oracle_stats.get("n_calls", "?")
-        return (
+        summary = (
             f"{self.builder_info.get('builder', 'region')}: "
             f"{self.n_vertices} vertices, volume {self.volume:.6g}, "
             f"{self.seconds:.1f} s, {calls} oracle calls"
             + (f"\n    stopped: {self.stopped_because}" if self.stopped_because else "")
         )
+        # A successful construction is not itself a feasibility certificate.
+        # Keep the model/assumption qualification alongside the geometry rather
+        # than requiring callers to discover it in nested metadata.
+        guarantee = self.builder_info.get("guarantee")
+        if guarantee:
+            summary += f"\n    guarantee: {guarantee}"
+        if "theorem_backed" in self.builder_info:
+            summary += f"\n    theorem_backed: {self.builder_info['theorem_backed']}"
+        certificate = self.builder_info.get("certificate")
+        if isinstance(certificate, dict):
+            summary += (f"\n    certificate: {certificate.get('status', 'unknown')}"
+                        f" (scope={certificate.get('scope', 'unknown')})")
+        return summary
 
     def save(self, path) -> None:
         """Persist the polytope (CSV + JSON) and the trace (CSV) side by side."""
@@ -146,12 +213,7 @@ class RegionResult:
         path = Path(path)
         if path.suffix.lower() in (".csv", ".json"):
             path = path.with_suffix("")
-        self.polytope.metadata.update(
-            builder=self.builder_info,
-            oracle_stats=self.oracle_stats,
-            seconds=self.seconds,
-            stopped_because=self.stopped_because,
-        )
+        self._sync_polytope_metadata()
         self.polytope.save(path)
         if self.trace:
             self.to_frame().to_csv(path.with_name(path.name + "_trace.csv"), index=False)
@@ -173,7 +235,28 @@ class RegionBuilder(ABC):
         return {"builder": self.name}
 
 
+@overload
+def get_builder(name: Literal["conservative"], **kwargs) -> ConservativeBuilder: ...
+
+
+@overload
+def get_builder(name: Literal["expansive"], **kwargs) -> ExpansiveBuilder: ...
+
+
+@overload
+def get_builder(name: Literal["memory-aware"], **kwargs) -> MemoryAwareBuilder: ...
+
+
+@overload
+def get_builder(name: Literal["ray-growth"], **kwargs) -> RayGrowthBuilder: ...
+
+
+@overload
+def get_builder(name: str, **kwargs) -> RegionBuilder: ...
+
+
 def get_builder(name: str, **kwargs) -> RegionBuilder:
+    """Resolve a builder; the conservative builder manages its own oracles."""
     return BUILDERS.get(name)(**kwargs)
 
 
